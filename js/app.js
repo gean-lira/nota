@@ -5,6 +5,15 @@ let selectedClientId = null;
 let editingIndex = null;
 const $ = id => document.getElementById(id);
 
+
+// PAGINAÇÃO - variáveis
+let currentClientsPage = 1;
+const clientsPageSize = 20; // máximo 20 clientes por página
+
+let currentHistoryPage = 1;
+const historyPageSize = 10; // máximo 10 items por página
+
+
 // SUGESTIONS: storage key and helpers
 const S_KEY = "nota_entrega_suggestions_v1";
 const S_MAX = 50; // max items per field
@@ -286,7 +295,10 @@ $("closeForm").onclick = () => {
 };
 
 $("cancelClientNew").onclick = () => {
-    // fecha o formulário e volta para lista inicial
+    selectedClientId = null; 
+    $("selectedLabel").innerText = "Nenhum";
+    products = [];
+    renderProducts();
     showInitialScreen();
 };
 
@@ -607,14 +619,33 @@ $("historyContent").onclick = function (e) {
             venda: entry.id
         });
 
-        requestAnimationFrame(() => {
-            window.print();
-            setTimeout(() => {
-                $("print-area").innerHTML = "";
-                // volta para a tela inicial após imprimir do histórico também
-                showInitialScreen();
-            }, 700);
-        });
+       requestAnimationFrame(() => {
+    window.print();
+    setTimeout(() => {
+        $("print-area").innerHTML = "";
+
+        // 🔹 Botão "Voltar ao início"
+        const backBtn = document.createElement("button");
+        backBtn.textContent = "Voltar ao início";
+        backBtn.className = "small-btn";
+        backBtn.style.marginTop = "14px";
+        backBtn.style.position = "fixed";
+        backBtn.style.bottom = "20px";
+        backBtn.style.right = "20px";
+        backBtn.style.zIndex = "99999";
+
+        backBtn.onclick = () => {
+            selectedClientId = null;                 // limpa seleção do cliente
+            $("selectedLabel").innerText = "Nenhum"; // reseta o texto
+            showInitialScreen();                    // volta para lista completa
+            backBtn.remove();                       // remove o botão
+        };
+
+        document.body.appendChild(backBtn);
+
+    }, 700);
+});
+
         return;
     }
 };

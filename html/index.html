@@ -1,135 +1,563 @@
-<!doctype html> 
-<html lang="pt-BR"> 
+<!doctype html>
+<html lang="pt-BR">
 
-<head> 
-    <meta charset="utf-8" /> 
-    <meta name="viewport" content="width=device-width,initial-scale=1" /> 
-    <title>Nota de Entrega</title> 
-    <link rel="stylesheet" href="../css/styles.css"> 
-    <!-- Favicon inline SVG (não precisa de arquivos externos) --> 
-    <link rel="icon" type="image/svg+xml" 
-        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M5 16a3 3 0 1 0 2.83 4H17a3 3 0 1 0 0-2H12l3-7h3v4h2v-6h-6l-1.5-3H7v2h4l1 2-2.2 5H7.83A3 3 0 0 0 5 16Z'/%3E%3C/svg%3E"> 
-    <meta name="theme-color" content="#0ea5a8"> 
-</head> 
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Nota de Entrega</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <!-- Favicon inline SVG (não precisa de arquivos externos) -->
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M5 16a3 3 0 1 0 2.83 4H17a3 3 0 1 0 0-2H12l3-7h3v4h2v-6h-6l-1.5-3H7v2h4l1 2-2.2 5H7.83A3 3 0 0 0 5 16Z'/%3E%3C/svg%3E">
+    <meta name="theme-color" content="#0ea5a8">
+</head>
 
-<body> 
-    <div class="wrap"> 
-        <h1>Nota de Entrega</h1> 
+<body>
 
-        <div class="app"> 
-            <!-- TELA DE CLIENTES (TELA INICIAL) --> 
-            <div class="card" id="client-area"> 
-                <div style="display:flex; gap:8px; margin-bottom:12px;"> 
-                    <input id="searchId" placeholder="ID" style="width:90px" list="s_searchId"> 
-                    <input id="searchName" placeholder="Nome" style="flex:1" list="s_searchName"> 
-                    <button id="btnNew" class="small-btn">Novo</button> 
-                </div> 
+    <div class="wrap">
+        <h1>Clientes</h1>
 
-                <div id="clientsList" class="client-grid"></div> 
+        <div class="app">
 
-                <div class="muted" style="margin-top:12px;"> 
-                    Selecionado: <span id="selectedLabel">Nenhum</span> 
-                </div> 
-            </div> 
+            <!-- TELA DE CLIENTES (TELA INICIAL) -->
+            <div class="card" id="client-area">
 
-            <!-- CADASTRO / EDIÇÃO --> 
-            <div class="card" id="clientFormCard" style="display:none"> 
-                <div style="display:flex; justify-content:space-between;"> 
-                    <b>Cadastro / Edição</b> 
-                    <button id="closeForm" class="ghost small-btn">Fechar</button> 
-                </div> 
+                <div style="display:flex; gap:8px; margin-bottom:12px;">
+                    <input id="searchId" placeholder="ID" style="width:90px" list="s_searchId">
+                    <input id="searchName" placeholder="Nome" style="flex:1" list="s_searchName">
+                    <button id="btnNew" class="small-btn">Novo</button>
+                </div>
 
-                <label>Nome <input id="f_name" list="s_f_name"></label> 
-                <label>CPF/CNPJ <input id="f_id" list="s_f_id"></label> 
-                <label>WhatsApp <input id="f_wh" list="s_f_wh"></label> 
-                <label>Telefone <input id="f_phone" list="s_f_phone"></label> 
+                <div id="clientsList" class="client-grid"></div>
 
-                <label>Rua</label> 
-                <div class="row"> 
-                    <input id="f_rua" class="street" placeholder="Rua / Avenida" list="s_f_rua"> 
-                    <input id="f_rua_num" class="num" placeholder="Nº / Apto" list="s_f_rua_num"> 
-                </div> 
+                <div id="clientsPager" style="margin-top:12px;"></div>
 
-                <label>Bairro <input id="f_bairro" list="s_f_bairro"></label> 
-                <label>Cidade <input id="f_cidade" list="s_f_cidade"></label> 
-                <label>Referência <input id="f_ref" list="s_f_ref"></label> 
+                <div class="muted" style="margin-top:12px;">
+                    Selecionado: <span id="selectedLabel">Nenhum</span>
+                </div>
+            </div>
 
-                <div style="display:flex; gap:8px; margin-top:10px;"> 
-                    <button id="saveClientNew">Salvar</button> 
-                    <button id="cancelClientNew" class="ghost">Cancelar</button> 
-                </div> 
+            <!-- CADASTRO / EDIÇÃO -->
+            <div class="card" id="clientFormCard" style="display:none">
 
-            </div> 
+                <div style="display:flex; justify-content:space-between;">
+                    <b>Cadastro / Edição</b>
+                    <button id="closeForm" class="ghost small-btn">Fechar</button>
+                </div>
 
-            <!-- TELA DE PRODUTOS (APARECE DEPOIS DE SELECIONAR CLIENTE) --> 
-            <div class="card" id="product-area" style="display:none"> 
-                <div style="display:flex; gap:8px;"> 
-                    <input id="prod_desc" placeholder="Produto" list="s_prod_desc"> 
-                    <input id="prod_price" placeholder="3,00" style="width:120px;" list="s_prod_price"> 
-                    <button id="addProd" class="small-btn">Adicionar</button> 
-                </div> 
+                <label>Nome <input id="f_name" list="s_f_name"></label>
+                <label>CPF/CNPJ <input id="f_id" list="s_f_id"></label>
+                <label>WhatsApp <input id="f_wh" list="s_f_wh"></label>
+                <label>Telefone <input id="f_phone" list="s_f_phone"></label>
 
-                <div id="prodList" style="margin-top:12px;"></div> 
+                <label>Rua</label>
+                <div class="row">
+                    <input id="f_rua" class="street" placeholder="Rua / Avenida" list="s_f_rua">
+                    <input id="f_rua_num" class="num" placeholder="Nº / Apto" list="s_f_rua_num">
+                </div>
 
-                <label style="margin-top:14px">Entrega (R$) 
-                    <input id="fee" value="0,00" list="s_fee"> 
-                </label> 
+                <label>Bairro <input id="f_bairro" list="s_f_bairro"></label>
+                <label>Cidade <input id="f_cidade" list="s_f_cidade"></label>
+                <label>Referência <input id="f_ref" list="s_f_ref"></label>
 
-                <label>Observação 
-                    <input id="note" list="s_note"> 
-                </label> 
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <button id="saveClientNew">Salvar</button>
+                    <button id="cancelClientNew" class="ghost">Cancelar</button>
+                </div>
 
-                <div class="pay-box"> 
-                    <button class="pay-btn" id="btnPix">PIX</button> 
-                    <button class="pay-btn" id="btnCard">CARTÃO</button> 
-                    <button class="pay-btn" id="btnCash">DINHEIRO</button> 
-                </div> 
+            </div>
 
-                <div style="display:flex; justify-content:space-between; margin-top:16px;"> 
-                    <button id="backClient" class="ghost">← Voltar</button> 
-                    <button id="printBtn">Imprimir</button> 
-                </div> 
+            <!-- TELA DE PRODUTOS (APARECE DEPOIS DE SELECIONAR CLIENTE) -->
+            <div class="card" id="product-area" style="display:none">
 
-            </div> 
+                <div style="display:flex; gap:8px;">
+                    <input id="prod_desc" placeholder="Produto" list="s_prod_desc">
+                    <input id="prod_price" placeholder="3,00" style="width:120px;" list="s_prod_price">
+                    <button id="addProd" class="small-btn">Adicionar</button>
+                </div>
 
-        </div> 
+                <div id="prodList" style="margin-top:12px;"></div>
 
-        <div id="print-area"></div> 
+                <label style="margin-top:14px">Entrega (R$)
+                    <input id="fee" value="0,00" list="s_fee">
+                </label>
 
-        <!-- DATALISTS PARA SUGESTÕES (populados dinamicamente) --> 
-        <datalist id="s_f_name"></datalist> 
-        <datalist id="s_f_id"></datalist> 
-        <datalist id="s_f_wh"></datalist> 
-        <datalist id="s_f_phone"></datalist> 
-        <datalist id="s_f_rua"></datalist> 
-        <datalist id="s_f_rua_num"></datalist> 
-        <datalist id="s_f_bairro"></datalist> 
-        <datalist id="s_f_cidade"></datalist> 
-        <datalist id="s_f_ref"></datalist> 
+                <label>Observação
+                    <input id="note" list="s_note">
+                </label>
 
-        <datalist id="s_prod_desc"></datalist> 
-        <datalist id="s_prod_price"></datalist> 
-        <datalist id="s_fee"></datalist> 
-        <datalist id="s_note"></datalist> 
+                <div class="pay-box">
+                    <button class="pay-btn" id="btnPix">PIX</button>
+                    <button class="pay-btn" id="btnCard">CARTÃO</button>
+                    <button class="pay-btn" id="btnCash">DINHEIRO</button>
+                </div>
 
-        <datalist id="s_searchName"></datalist> 
-        <datalist id="s_searchId"></datalist> 
+                <div style="display:flex; justify-content:space-between; margin-top:16px;">
+                    <button id="backClient" class="ghost">← Voltar</button>
+                    <button id="printBtn">Imprimir</button>
+                </div>
 
-        <!-- Modal histórico --> 
-        <div id="historyModal"> 
-            <div class="modal-card"> 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"> 
-                    <b>Histórico de Compras</b> 
-                    <div> 
-                        <button id="closeHistory" class="ghost small-btn">Fechar</button> 
-                    </div> 
-                </div> 
-                <div id="historyContent"></div> 
-            </div> 
-        </div> 
+            </div>
 
-    </div> 
+        </div>
 
-    <script src="../js/app.js"></script> 
-</body> 
+        <div id="print-area"></div>
+
+        <!-- DATALISTS PARA SUGESTÕES (populados dinamicamente) -->
+        <datalist id="s_f_name"></datalist>
+        <datalist id="s_f_id"></datalist>
+        <datalist id="s_f_wh"></datalist>
+        <datalist id="s_f_phone"></datalist>
+        <datalist id="s_f_rua"></datalist>
+        <datalist id="s_f_rua_num"></datalist>
+        <datalist id="s_f_bairro"></datalist>
+        <datalist id="s_f_cidade"></datalist>
+        <datalist id="s_f_ref"></datalist>
+
+        <datalist id="s_prod_desc"></datalist>
+        <datalist id="s_prod_price"></datalist>
+        <datalist id="s_fee"></datalist>
+        <datalist id="s_note"></datalist>
+
+        <datalist id="s_searchName"></datalist>
+        <datalist id="s_searchId"></datalist>
+
+        <!-- Modal histórico -->
+        <div id="historyModal">
+            <div class="modal-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <b>Histórico de Compras</b>
+                    <div>
+                        <button id="closeHistory" class="ghost small-btn">Fechar</button>
+                    </div>
+                </div>
+                <div id="historyContent"></div>
+                <div id="historyPager" style="margin-top:12px;"></div>
+                
+            </div>
+        </div>
+
+    </div>
+
+    <script src="../js/app.js"></script>
+
+    <script>
+/* ====== Alteração: mudar títulos conforme ação (novo / editar / histórico) ====== */
+
+function setMainTitle(txt) {
+  const h1 = document.querySelector("h1");
+  if (h1) h1.textContent = txt;
+}
+function setCardTitle(txt) {
+  const el = document.querySelector("#clientFormCard b");
+  if (el) el.textContent = txt;
+}
+
+function modoPadrao(){
+  setMainTitle("Clientes");
+  setCardTitle("Cadastro / Edição");
+}
+function modoCadastro(){
+  setMainTitle("Cadastro");
+  setCardTitle("Cadastro");
+}
+function modoEditar(){
+  setMainTitle("Editar");
+  setCardTitle("Editar");
+}
+function modoHistorico(){
+  setMainTitle("Histórico");
+  setCardTitle("Histórico");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Quando clicar "Novo"
+  const btnNew = document.getElementById("btnNew");
+  if (btnNew) btnNew.addEventListener("click", modoCadastro);
+
+  // Quando clicar em editar / histórico na lista (delegação já existe no seu js; aqui só altera títulos)
+  const clientsList = document.getElementById("clientsList");
+  if (clientsList) {
+    clientsList.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b || !b.dataset) return;
+      const action = b.dataset.a;
+      if (action === "edit") {
+        // pequena espera para o seu código existente abrir o formulário
+        setTimeout(modoEditar, 10);
+      } else if (action === "history") {
+        setTimeout(modoHistorico, 10);
+      }
+    });
+  }
+
+  // Fechar / cancelar / salvar → volta ao padrão (lista clientes)
+  ["closeForm", "cancelClientNew", "saveClientNew"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("click", () => {
+      // espera curtinha para seu fluxo terminar e só então resetar os títulos
+      setTimeout(modoPadrao, 10);
+    });
+  });
+
+  // Fechar modal histórico (botão)
+  const closeHistory = document.getElementById("closeHistory");
+  if (closeHistory) closeHistory.addEventListener("click", () => setTimeout(modoPadrao, 10));
+
+  // Fechar modal histórico clicando fora do card
+  const historyModal = document.getElementById("historyModal");
+  if (historyModal) {
+    historyModal.addEventListener("click", (e) => {
+      if (e.target && e.target.id === "historyModal") {
+        setTimeout(modoPadrao, 10);
+      }
+    });
+  }
+});
+</script>
+
+
+    <script>
+    // ===== ALTERAÇÃO DOS TÍTULOS (Cadastro / Clientes) =====
+
+    function setTitleCadastro() {
+        // altera o título principal
+        document.querySelector("h1").textContent = "Cadastro";
+
+        // altera o título interno do card
+        const title = document.querySelector("#clientFormCard b");
+        if (title) title.textContent = "Cadastro";
+    }
+
+    function setTitleClientes() {
+        // volta o título principal
+        document.querySelector("h1").textContent = "Clientes";
+
+        // volta o título interno
+        const title = document.querySelector("#clientFormCard b");
+        if (title) title.textContent = "Cadastro / Edição";
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+
+        // quando clicar em NOVO
+        const btnNew = document.getElementById("btnNew");
+        if (btnNew) {
+            btnNew.addEventListener("click", setTitleCadastro);
+        }
+
+        // voltar ao padrão depois de fechar / cancelar / salvar
+        ["closeForm", "cancelClientNew", "saveClientNew"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener("click", () => {
+                    setTimeout(setTitleClientes, 10);
+                });
+            }
+        });
+    });
+</script>
+
+
+    
+
+    <!-- LOGIN INJETADO (apenas UMA caixa "Salvar login"; sem sugestão de credenciais) -->
+    <script>
+        (function () {
+            // ====== CONFIGURAÇÃO (edite aqui se quiser) ======
+            const CREDENTIALS = { user: "admin", pass: "1234" }; // validação local (teste)
+            const MAX_ATTEMPTS = 5;     // tentativas antes do bloqueio
+            const LOCKOUT_SECONDS = 30; // duração do bloqueio (s)
+            // ==================================================
+
+            // --- injetar estilos isolados (não altera seu CSS global) ---
+            const style = document.createElement('style');
+            style.setAttribute('data-login-single-save', 'true');
+            style.textContent = `
+/* overlay */
+.login-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(rgba(2,6,23,0.55),rgba(2,6,23,0.55));z-index:99999;padding:20px}
+/* card */
+.login-card{width:420px;max-width:100%;background:linear-gradient(180deg,#ffffff,#fbfdff);border-radius:12px;padding:22px;box-shadow:0 18px 46px rgba(2,6,23,0.36);box-sizing:border-box;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+.login-card h2{margin:0 0 6px 0;font-size:20px;color:#0f172a}
+.login-sub{font-size:13px;color:#475569;margin-bottom:10px}
+.field{margin-top:12px;display:flex;flex-direction:column}
+.field label{font-size:13px;color:#334155;margin-bottom:6px}
+.input{padding:11px 12px;border-radius:8px;border:1px solid #e6e9ee;font-size:14px;outline:none}
+.input:focus{box-shadow:0 8px 20px rgba(6,182,212,0.06);border-color:#06b6d4}
+.row{display:flex;gap:8px;align-items:center}
+.btn-primary{background:#06b6d4;color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:600}
+.opts{display:flex;gap:12px;align-items:center;font-size:13px;color:#475569}
+.toggle-pwd{background:transparent;border:none;cursor:pointer;font-size:16px;padding:6px;border-radius:6px}
+.footer{margin-top:12px;display:flex;justify-content:space-between;align-items:center;color:#64748b;font-size:13px}
+.error{margin-top:10px;color:#dc2626;font-size:13px;min-height:18px;display:none}
+.logout-btn{position:fixed;right:18px;top:14px;background:transparent;border:1px solid rgba(15,23,42,0.06);padding:7px 10px;border-radius:8px;cursor:pointer;z-index:99998}
+@media(max-width:460px){.login-card{width:100%;padding:16px;border-radius:10px}}
+@keyframes shake {10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-4px)}40%,60%{transform:translateX(4px)}}
+.shake{animation:shake .36s linear}
+`;
+            document.head.appendChild(style);
+
+            // --- construir o overlay/modal ---
+            const overlay = document.createElement('div');
+            overlay.className = 'login-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+
+            overlay.innerHTML = `
+<div class="login-card" aria-labelledby="loginTitle">
+  <h2 id="loginTitle">Acesse sua conta</h2>
+  <div class="login-sub">Faça login para acessar o sistema</div>
+
+  <div class="field">
+    <label for="l_user">Usuário</label>
+    <input id="l_user" class="input" type="text" autocomplete="username" placeholder="Seu usuário">
+  </div>
+
+  <div class="field">
+    <label for="l_pass">Senha</label>
+    <div class="row" style="align-items:center">
+      <input id="l_pass" class="input" type="password" autocomplete="current-password" placeholder="Sua senha" style="flex:1">
+      <button id="l_toggle" class="toggle-pwd" aria-label="Mostrar senha" title="Mostrar senha">👁️</button>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+    <div class="opts">
+      <!-- Apenas UMA caixa: salva usuário E mantém logado -->
+      <label><input id="l_save" type="checkbox"> Salvar login</label>
+    </div>
+    <div><button id="l_btn" class="btn-primary" type="button">Entrar</button></div>
+  </div>
+
+  <div id="l_error" class="error" role="status" aria-live="polite"></div>
+
+  <div class="footer">
+    <!-- nota removida conforme solicitado (nenhuma sugestão de credenciais apresentada) -->
+    <div></div>
+    <div id="l_lockinfo" style="font-size:13px;color:#475569"></div>
+  </div>
+</div>
+`;
+            document.body.appendChild(overlay);
+
+            // --- esconder sua app até login ---
+            const appWrap = document.querySelector('.wrap');
+            if (appWrap) {
+                appWrap.dataset._orig_display = getComputedStyle(appWrap).display || '';
+                appWrap.style.display = 'none';
+                appWrap.setAttribute('aria-hidden', 'true');
+            }
+
+            // --- referências ---
+            const inpUser = document.getElementById('l_user');
+            const inpPass = document.getElementById('l_pass');
+            const btn = document.getElementById('l_btn');
+            const err = document.getElementById('l_error');
+            const saveLogin = document.getElementById('l_save');
+            const toggle = document.getElementById('l_toggle');
+            const lockinfo = document.getElementById('l_lockinfo');
+
+            // --- carregar estado salvo se existir ---
+            const savedUser = localStorage.getItem('saved_username_v2');
+            const persisted = localStorage.getItem('persist_logged_v2') === '1';
+            if (savedUser) {
+                inpUser.value = savedUser;
+                saveLogin.checked = true;
+            }
+
+            // se já houver persistência, revelamos a app imediatamente
+            if (persisted) {
+                // restaurar e remover modal sem animação
+                if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                document.head.querySelector('style[data-login-single-save]')?.remove();
+                document.body.style.overflow = '';
+                if (appWrap) {
+                    appWrap.style.display = appWrap.dataset._orig_display || '';
+                    appWrap.removeAttribute('aria-hidden');
+                }
+                // injetar botão de logout
+                injectLogout();
+                return;
+            }
+
+            // --- evitar scroll do fundo enquanto modal aberto ---
+            const priorOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+
+            // --- focus trap setup ---
+            let focusable = [];
+            function updateFocusable() {
+                focusable = overlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            }
+            updateFocusable();
+
+            // --- lockout logic ---
+            let attempts = 0;
+            let lockUntil = 0;
+            let lockTimer = null;
+
+            function showError(msg, shake = true) {
+                err.textContent = msg;
+                err.style.display = 'block';
+                if (shake) {
+                    const card = overlay.querySelector('.login-card');
+                    card.classList.remove('shake');
+                    void card.offsetWidth;
+                    card.classList.add('shake');
+                }
+            }
+            function hideError() {
+                err.textContent = '';
+                err.style.display = 'none';
+            }
+
+            function setLock(seconds) {
+                lockUntil = Date.now() + seconds * 1000;
+                updateLock();
+                lockTimer = setInterval(updateLock, 500);
+            }
+            function clearLock() {
+                lockUntil = 0;
+                if (lockTimer) { clearInterval(lockTimer); lockTimer = null; }
+                lockinfo.textContent = '';
+                enableInputs(true);
+            }
+            function updateLock() {
+                const now = Date.now();
+                if (lockUntil > now) {
+                    const rem = Math.ceil((lockUntil - now) / 1000);
+                    lockinfo.textContent = `Bloqueado por ${rem}s`;
+                    enableInputs(false);
+                } else {
+                    lockinfo.textContent = '';
+                    enableInputs(true);
+                    clearLock();
+                }
+            }
+            function enableInputs(on) {
+                inpUser.disabled = !on;
+                inpPass.disabled = !on;
+                btn.disabled = !on;
+                toggle.disabled = !on;
+                saveLogin.disabled = !on;
+            }
+
+            // --- revelar app quando login for bem-sucedido ---
+            function reveal() {
+                if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                document.head.querySelector('style[data-login-single-save]')?.remove();
+                document.body.style.overflow = priorOverflow || '';
+                if (appWrap) {
+                    appWrap.style.display = appWrap.dataset._orig_display || '';
+                    appWrap.removeAttribute('aria-hidden');
+                }
+                injectLogout();
+            }
+
+            // --- botão logout dinâmico ---
+            function injectLogout() {
+                if (!document.querySelector('.logout-btn')) {
+                    const b = document.createElement('button');
+                    b.className = 'logout-btn';
+                    b.textContent = 'Sair';
+                    b.title = 'Sair';
+                    b.addEventListener('click', () => {
+                        // limpar persistência e recarregar para mostrar modal novamente
+                        localStorage.removeItem('persist_logged_v2');
+                        localStorage.removeItem('saved_username_v2');
+                        sessionStorage.removeItem('persist_logged_v2');
+                        location.reload();
+                    });
+                    document.body.appendChild(b);
+                }
+            }
+
+            // --- validação (local) - altere para integrar com API em produção ---
+            function validate(u, p) {
+                return u === CREDENTIALS.user && p === CREDENTIALS.pass;
+            }
+
+            function attempt() {
+                hideError();
+                if (lockUntil > Date.now()) {
+                    showError('Bloqueado. Aguarde...', false);
+                    return;
+                }
+                const u = (inpUser.value || '').trim();
+                const p = inpPass.value || '';
+                if (!u || !p) { showError('Preencha usuário e senha.'); return; }
+
+                if (validate(u, p)) {
+                    // se usuário escolheu salvar login: gravamos username e persistência local
+                    if (saveLogin.checked) {
+                        localStorage.setItem('saved_username_v2', u);
+                        localStorage.setItem('persist_logged_v2', '1');
+                    } else {
+                        // não persistir: apenas sessão temporária
+                        sessionStorage.setItem('persist_logged_v2', '1');
+                        localStorage.removeItem('persist_logged_v2');
+                    }
+                    reveal();
+                } else {
+                    attempts++;
+                    if (attempts >= MAX_ATTEMPTS) {
+                        setLock(LOCKOUT_SECONDS);
+                        attempts = 0;
+                        showError(`Muitas tentativas. Bloqueado por ${LOCKOUT_SECONDS}s.`);
+                    } else {
+                        const left = MAX_ATTEMPTS - attempts;
+                        showError(`Usuário ou senha incorretos. ${left} tentativa(s) restante(s).`);
+                    }
+                }
+            }
+
+            // --- eventos ---
+            btn.addEventListener('click', attempt);
+            inpPass.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); });
+            inpUser.addEventListener('keydown', e => { if (e.key === 'Enter') inpPass.focus(); });
+
+            toggle.addEventListener('click', () => {
+                if (inpPass.type === 'password') {
+                    inpPass.type = 'text'; toggle.textContent = '🙈'; toggle.setAttribute('aria-label', 'Ocultar senha');
+                } else {
+                    inpPass.type = 'password'; toggle.textContent = '👁️'; toggle.setAttribute('aria-label', 'Mostrar senha');
+                }
+                inpPass.focus();
+            });
+
+            // focus trap para manter foco dentro do modal
+            document.addEventListener('keydown', (e) => {
+                if (!document.body.contains(overlay)) return;
+                if (e.key === 'Tab') {
+                    updateFocusable();
+                    const nodes = Array.from(focusable).filter(n => !n.disabled && n.offsetParent !== null);
+                    if (nodes.length === 0) { e.preventDefault(); return; }
+                    const first = nodes[0], last = nodes[nodes.length - 1];
+                    if (e.shiftKey) {
+                        if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+                    } else {
+                        if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+                    }
+                } else if (e.key === 'Escape') {
+                    hideError();
+                    showError('Pressione Enter para tentar novamente.', false);
+                }
+            });
+
+            // clicar no overlay apenas mostra aviso (não fecha)
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    showError('Faça login para continuar.');
+                }
+            });
+
+            // foco inicial
+            setTimeout(() => inpUser.focus(), 120);
+        })();
+    </script>
+    <!-- FIM LOGIN INJETADO -->
+
+</body>
+
 </html>
