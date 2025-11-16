@@ -1,143 +1,135 @@
-<!doctype html>
-<html lang="pt-BR">
+<!doctype html> 
+<html lang="pt-BR"> 
 
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Nota de Entrega</title>
-    <link rel="stylesheet" href="../css/styles.css">
-    <!-- Favicon inline SVG (não precisa de arquivos externos) -->
-    <link rel="icon" type="image/svg+xml"
-        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M5 16a3 3 0 1 0 2.83 4H17a3 3 0 1 0 0-2H12l3-7h3v4h2v-6h-6l-1.5-3H7v2h4l1 2-2.2 5H7.83A3 3 0 0 0 5 16Z'/%3E%3C/svg%3E">
-    <meta name="theme-color" content="#0ea5a8">
+<head> 
+    <meta charset="utf-8" /> 
+    <meta name="viewport" content="width=device-width,initial-scale=1" /> 
+    <title>Nota de Entrega</title> 
+    <link rel="stylesheet" href="../css/styles.css"> 
+    <!-- Favicon inline SVG (não precisa de arquivos externos) --> 
+    <link rel="icon" type="image/svg+xml" 
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M5 16a3 3 0 1 0 2.83 4H17a3 3 0 1 0 0-2H12l3-7h3v4h2v-6h-6l-1.5-3H7v2h4l1 2-2.2 5H7.83A3 3 0 0 0 5 16Z'/%3E%3C/svg%3E"> 
+    <meta name="theme-color" content="#0ea5a8"> 
+</head> 
 
+<body> 
+    <div class="wrap"> 
+        <h1>Nota de Entrega</h1> 
 
-</head>
+        <div class="app"> 
+            <!-- TELA DE CLIENTES (TELA INICIAL) --> 
+            <div class="card" id="client-area"> 
+                <div style="display:flex; gap:8px; margin-bottom:12px;"> 
+                    <input id="searchId" placeholder="ID" style="width:90px" list="s_searchId"> 
+                    <input id="searchName" placeholder="Nome" style="flex:1" list="s_searchName"> 
+                    <button id="btnNew" class="small-btn">Novo</button> 
+                </div> 
 
-<body>
+                <div id="clientsList" class="client-grid"></div> 
 
-    <div class="wrap">
-        <h1>Nota de Entrega</h1>
+                <div class="muted" style="margin-top:12px;"> 
+                    Selecionado: <span id="selectedLabel">Nenhum</span> 
+                </div> 
+            </div> 
 
-        <div class="app">
+            <!-- CADASTRO / EDIÇÃO --> 
+            <div class="card" id="clientFormCard" style="display:none"> 
+                <div style="display:flex; justify-content:space-between;"> 
+                    <b>Cadastro / Edição</b> 
+                    <button id="closeForm" class="ghost small-btn">Fechar</button> 
+                </div> 
 
-            <!-- TELA DE CLIENTES (TELA INICIAL) -->
-            <div class="card" id="client-area">
+                <label>Nome <input id="f_name" list="s_f_name"></label> 
+                <label>CPF/CNPJ <input id="f_id" list="s_f_id"></label> 
+                <label>WhatsApp <input id="f_wh" list="s_f_wh"></label> 
+                <label>Telefone <input id="f_phone" list="s_f_phone"></label> 
 
-                <div style="display:flex; gap:8px; margin-bottom:12px;">
-                    <input id="searchId" placeholder="ID" style="width:90px" list="s_searchId">
-                    <input id="searchName" placeholder="Nome" style="flex:1" list="s_searchName">
-                    <button id="btnNew" class="small-btn">Novo</button>
-                </div>
+                <label>Rua</label> 
+                <div class="row"> 
+                    <input id="f_rua" class="street" placeholder="Rua / Avenida" list="s_f_rua"> 
+                    <input id="f_rua_num" class="num" placeholder="Nº / Apto" list="s_f_rua_num"> 
+                </div> 
 
-                <div id="clientsList" class="client-grid"></div>
+                <label>Bairro <input id="f_bairro" list="s_f_bairro"></label> 
+                <label>Cidade <input id="f_cidade" list="s_f_cidade"></label> 
+                <label>Referência <input id="f_ref" list="s_f_ref"></label> 
 
-                <div class="muted" style="margin-top:12px;">
-                    Selecionado: <span id="selectedLabel">Nenhum</span>
-                </div>
-            </div>
+                <div style="display:flex; gap:8px; margin-top:10px;"> 
+                    <button id="saveClientNew">Salvar</button> 
+                    <button id="cancelClientNew" class="ghost">Cancelar</button> 
+                </div> 
 
-            <!-- CADASTRO / EDIÇÃO -->
-            <div class="card" id="clientFormCard" style="display:none">
+            </div> 
 
-                <div style="display:flex; justify-content:space-between;">
-                    <b>Cadastro / Edição</b>
-                    <button id="closeForm" class="ghost small-btn">Fechar</button>
-                </div>
+            <!-- TELA DE PRODUTOS (APARECE DEPOIS DE SELECIONAR CLIENTE) --> 
+            <div class="card" id="product-area" style="display:none"> 
+                <div style="display:flex; gap:8px;"> 
+                    <input id="prod_desc" placeholder="Produto" list="s_prod_desc"> 
+                    <input id="prod_price" placeholder="3,00" style="width:120px;" list="s_prod_price"> 
+                    <button id="addProd" class="small-btn">Adicionar</button> 
+                </div> 
 
-                <label>Nome <input id="f_name" list="s_f_name"></label>
-                <label>CPF/CNPJ <input id="f_id" list="s_f_id"></label>
-                <label>WhatsApp <input id="f_wh" list="s_f_wh"></label>
-                <label>Telefone <input id="f_phone" list="s_f_phone"></label>
+                <div id="prodList" style="margin-top:12px;"></div> 
 
-                <label>Rua</label>
-                <div class="row">
-                    <input id="f_rua" class="street" placeholder="Rua / Avenida" list="s_f_rua">
-                    <input id="f_rua_num" class="num" placeholder="Nº / Apto" list="s_f_rua_num">
-                </div>
+                <label style="margin-top:14px">Entrega (R$) 
+                    <input id="fee" value="0,00" list="s_fee"> 
+                </label> 
 
-                <label>Bairro <input id="f_bairro" list="s_f_bairro"></label>
-                <label>Cidade <input id="f_cidade" list="s_f_cidade"></label>
-                <label>Referência <input id="f_ref" list="s_f_ref"></label>
+                <label>Observação 
+                    <input id="note" list="s_note"> 
+                </label> 
 
-                <div style="display:flex; gap:8px; margin-top:10px;">
-                    <button id="saveClientNew">Salvar</button>
-                    <button id="cancelClientNew" class="ghost">Cancelar</button>
-                </div>
+                <div class="pay-box"> 
+                    <button class="pay-btn" id="btnPix">PIX</button> 
+                    <button class="pay-btn" id="btnCard">CARTÃO</button> 
+                    <button class="pay-btn" id="btnCash">DINHEIRO</button> 
+                </div> 
 
-            </div>
+                <div style="display:flex; justify-content:space-between; margin-top:16px;"> 
+                    <button id="backClient" class="ghost">← Voltar</button> 
+                    <button id="printBtn">Imprimir</button> 
+                </div> 
 
-            <!-- TELA DE PRODUTOS (APARECE DEPOIS DE SELECIONAR CLIENTE) -->
-            <div class="card" id="product-area" style="display:none">
+            </div> 
 
-                <div style="display:flex; gap:8px;">
-                    <input id="prod_desc" placeholder="Produto" list="s_prod_desc">
-                    <input id="prod_price" placeholder="3,00" style="width:120px;" list="s_prod_price">
-                    <button id="addProd" class="small-btn">Adicionar</button>
-                </div>
+        </div> 
 
-                <div id="prodList" style="margin-top:12px;"></div>
+        <div id="print-area"></div> 
 
-                <label style="margin-top:14px">Entrega (R$)
-                    <input id="fee" value="0,00" list="s_fee">
-                </label>
+        <!-- DATALISTS PARA SUGESTÕES (populados dinamicamente) --> 
+        <datalist id="s_f_name"></datalist> 
+        <datalist id="s_f_id"></datalist> 
+        <datalist id="s_f_wh"></datalist> 
+        <datalist id="s_f_phone"></datalist> 
+        <datalist id="s_f_rua"></datalist> 
+        <datalist id="s_f_rua_num"></datalist> 
+        <datalist id="s_f_bairro"></datalist> 
+        <datalist id="s_f_cidade"></datalist> 
+        <datalist id="s_f_ref"></datalist> 
 
-                <label>Observação
-                    <input id="note" list="s_note">
-                </label>
+        <datalist id="s_prod_desc"></datalist> 
+        <datalist id="s_prod_price"></datalist> 
+        <datalist id="s_fee"></datalist> 
+        <datalist id="s_note"></datalist> 
 
-                <div class="pay-box">
-                    <button class="pay-btn" id="btnPix">PIX</button>
-                    <button class="pay-btn" id="btnCard">CARTÃO</button>
-                    <button class="pay-btn" id="btnCash">DINHEIRO</button>
-                </div>
+        <datalist id="s_searchName"></datalist> 
+        <datalist id="s_searchId"></datalist> 
 
-                <div style="display:flex; justify-content:space-between; margin-top:16px;">
-                    <button id="backClient" class="ghost">← Voltar</button>
-                    <button id="printBtn">Imprimir</button>
-                </div>
+        <!-- Modal histórico --> 
+        <div id="historyModal"> 
+            <div class="modal-card"> 
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"> 
+                    <b>Histórico de Compras</b> 
+                    <div> 
+                        <button id="closeHistory" class="ghost small-btn">Fechar</button> 
+                    </div> 
+                </div> 
+                <div id="historyContent"></div> 
+            </div> 
+        </div> 
 
-            </div>
+    </div> 
 
-        </div>
-
-        <div id="print-area"></div>
-
-        <!-- DATALISTS PARA SUGESTÕES (populados dinamicamente) -->
-        <datalist id="s_f_name"></datalist>
-        <datalist id="s_f_id"></datalist>
-        <datalist id="s_f_wh"></datalist>
-        <datalist id="s_f_phone"></datalist>
-        <datalist id="s_f_rua"></datalist>
-        <datalist id="s_f_rua_num"></datalist>
-        <datalist id="s_f_bairro"></datalist>
-        <datalist id="s_f_cidade"></datalist>
-        <datalist id="s_f_ref"></datalist>
-
-        <datalist id="s_prod_desc"></datalist>
-        <datalist id="s_prod_price"></datalist>
-        <datalist id="s_fee"></datalist>
-        <datalist id="s_note"></datalist>
-
-        <datalist id="s_searchName"></datalist>
-        <datalist id="s_searchId"></datalist>
-
-        <!-- Modal histórico -->
-        <div id="historyModal">
-            <div class="modal-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <b>Histórico de Compras</b>
-                    <div>
-                        <button id="closeHistory" class="ghost small-btn">Fechar</button>
-                    </div>
-                </div>
-                <div id="historyContent"></div>
-            </div>
-        </div>
-
-    </div>
-
-    <script src="../js/app.js"></script>
-</body>
-
+    <script src="../js/app.js"></script> 
+</body> 
 </html>
