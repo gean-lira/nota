@@ -12,6 +12,85 @@
     <meta name="theme-color" content="#0ea5a8">
 </head>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../db/supabase.js"></script>
+<script src="../js/produtos.js"></script>
+
+<script>
+  (function setupProdutosUI(){
+    const nomeEl = document.getElementById('nome');
+    const precoEl = document.getElementById('preco');
+    const estoqueEl = document.getElementById('estoque');
+    const btnAdd = document.getElementById('btnAdd');
+    const lista = document.getElementById('lista');
+
+    if (!lista && !btnAdd) return;
+
+    async function carregar() {
+      try {
+        const dados = await listarProdutos();
+        lista.innerHTML = '';
+        
+        if (!dados || dados.length === 0) {
+          lista.innerHTML = '<tr><td colspan="5">Nenhum produto cadastrado</td></tr>';
+          return;
+        }
+
+        dados.forEach(p => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${p.id}</td>
+            <td>${p.nome}</td>
+            <td>${p.preco}</td>
+            <td>${p.estoque}</td>
+            <td>
+              <button onclick="editarProduto(${p.id})">Editar</button>
+              <button onclick="removerProduto(${p.id})">Excluir</button>
+            </td>
+          `;
+          lista.appendChild(tr);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    window.editarProduto = async function(id) {
+      const nome = prompt("Novo nome:");
+      if (!nome) return;
+      await atualizarProduto(id, { nome });
+      carregar();
+    };
+
+    window.removerProduto = async function(id) {
+      if (!confirm("Excluir este produto?")) return;
+      await excluirProduto(id);
+      carregar();
+    };
+
+    if (btnAdd) {
+      btnAdd.onclick = async () => {
+        const nome = nomeEl.value.trim();
+        const preco = parseFloat(precoEl.value) || 0;
+        const estoque = parseInt(estoqueEl.value) || 0;
+
+        if (!nome) return alert("Digite o nome do produto.");
+
+        await adicionarProduto({ nome, preco, estoque });
+
+        nomeEl.value = "";
+        precoEl.value = "";
+        estoqueEl.value = "";
+
+        carregar();
+      };
+    }
+
+    carregar();
+  })();
+</script>
+
+
 <body>
 
     <div class="wrap">
