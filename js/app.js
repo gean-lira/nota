@@ -451,7 +451,7 @@ function buildPrint(obj) {
     const totalText = totalNum.toFixed(2).replace(".", ",");
 
     return `
-    <div class="no-break" style="width:80mm;font-family:monospace;padding:3px; white-space:normal; font-size:12px; line-height:1;">
+    <div class="no-break" style="width:80mm;font-family:monospace;padding:3px; white-space:normal; font-size:16px; line-height:1;">
 
       <div style="text-align:center; font-weight:700; margin-bottom:4px; font-size:12px;">NOTA DE ENTREGA</div>
 
