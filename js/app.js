@@ -5,16 +5,14 @@ let selectedClientId = null;
 let editingIndex = null;
 const $ = id => document.getElementById(id);
 
-
-// PAGINAÇÃO - variáveis
+// PAGINAÇÃO - variáveis (declaradas; implementação da paginação ficará a parte)
 let currentClientsPage = 1;
 const clientsPageSize = 20; // máximo 20 clientes por página
 
 let currentHistoryPage = 1;
 const historyPageSize = 10; // máximo 10 items por página
 
-
-// SUGESTIONS: storage key and helpers
+// SUGGESTIONS: storage key and helpers
 const S_KEY = "nota_entrega_suggestions_v1";
 const S_MAX = 50; // max items per field
 
@@ -143,19 +141,25 @@ function ensurePurchasesField() {
 
 ensurePurchasesField();
 
-if (clients.length === 0) {
-    clients = [{
-        idNum: 1,
-        name: "Aline Alves",
-        whatsapp: "48 98403-6299",
-        rua: "Av. Caetano Silveira",
-        rua_num: "901",
-        bairro: "Brejaru",
-        cidade: "Palhoça",
-        purchases: []
-    }];
-    saveClients();
+// ---------- MELHOR OPÇÃO: criar cliente exemplo apenas NA PRIMEIRA EXECUÇÃO ----------
+const INIT_KEY = "nota_entrega_initialized_v1";
+if (!localStorage.getItem(INIT_KEY)) {
+    if (!clients || clients.length === 0) {
+        clients = [{
+            idNum: 1,
+            name: "Aline Alves",
+            whatsapp: "48 98403-6299",
+            rua: "Av. Caetano Silveira",
+            rua_num: "901",
+            bairro: "Brejaru",
+            cidade: "Palhoça",
+            purchases: []
+        }];
+        saveClients();
+    }
+    localStorage.setItem(INIT_KEY, "1");
 }
+// -----------------------------------------------------------------------------------
 
 function newId() {
     const ids = clients.map(c => c.idNum).sort((a, b) => a - b);
@@ -165,15 +169,16 @@ function newId() {
 
 function showInitialScreen() {
     // mostra a lista inicial
-    $("client-area").style.display = "block";
-    $("product-area").style.display = "none";
-    $("clientFormCard").style.display = "none";
+    if ($("client-area")) $("client-area").style.display = "block";
+    if ($("product-area")) $("product-area").style.display = "none";
+    if ($("clientFormCard")) $("clientFormCard").style.display = "none";
     selectedClientId = null;
-    $("selectedLabel").innerText = "Nenhum";
+    if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
 }
 
 function renderClients(name = "", id = "") {
     const box = $("clientsList");
+    if (!box) return;
     box.innerHTML = "";
 
     name = name.toLowerCase();
@@ -190,9 +195,9 @@ function renderClients(name = "", id = "") {
       <div class="client-info">
         <div class="client-id">${c.idNum}</div>
         <div>
-          <b>${c.name}</b><br>
-          <span class="muted">${c.whatsapp || ""}</span><br>
-          <span class="muted" style="font-size:12px">${rua}</span>
+          <b>${escapeHtml(c.name)}</b><br>
+          <span class="muted">${escapeHtml(c.whatsapp || "")}</span><br>
+          <span class="muted" style="font-size:12px">${escapeHtml(rua)}</span>
         </div>
       </div>
 
@@ -209,26 +214,27 @@ function renderClients(name = "", id = "") {
     if (!box.innerHTML)
         box.innerHTML = '<div class="muted">Nenhum cliente encontrado</div>';
 
-    // also populate searchName suggestion list with client names
-    // (store recent searches separately via addSuggestion when user types)
-    // but we refresh s_searchName with current client names as convenience:
+    // refresh suggestion lists for convenience
     const names = clients.map(c => c.name).filter(Boolean).slice().reverse();
     const dlsn = $("s_searchName"); if (dlsn) dlsn.innerHTML = names.map(n => `<option value="${escapeHtmlAttr(n)}">`).join("");
     const ids = clients.map(c => c.idNum).filter(Boolean).slice().reverse();
     const dlsi = $("s_searchId"); if (dlsi) dlsi.innerHTML = ids.map(n => `<option value="${escapeHtmlAttr(n)}">`).join("");
 }
 
-$("clientsList").onclick = e => {
+/* delegation for client list buttons */
+function clientsListClickHandler(e) {
     const b = e.target.closest("button"); if (!b) return;
     const a = b.dataset.a;
     const i = Number(b.dataset.i);
     const c = clients[i];
 
+    if (!c) return;
+
     if (a === "select") {
         selectedClientId = c.idNum;
-        $("selectedLabel").innerText = c.name;
-        $("client-area").style.display = "none";
-        $("product-area").style.display = "block";
+        if ($("selectedLabel")) $("selectedLabel").innerText = c.name;
+        if ($("client-area")) $("client-area").style.display = "none";
+        if ($("product-area")) $("product-area").style.display = "block";
         return;
     }
 
@@ -236,22 +242,23 @@ $("clientsList").onclick = e => {
         editingIndex = i;
 
         // Fecha telas anteriores (pula de tela)
-        $("client-area").style.display = "none";
-        $("product-area").style.display = "none";
+        if ($("client-area")) $("client-area").style.display = "none";
+        if ($("product-area")) $("product-area").style.display = "none";
 
         // Abre somente o formulário de edição
-        $("clientFormCard").style.display = "block";
+        if ($("clientFormCard")) $("clientFormCard").style.display = "block";
 
-        // Preenche os campos
-        $("f_name").value = c.name;
-        $("f_id").value = c.id;
-        $("f_wh").value = c.whatsapp;
-        $("f_phone").value = c.phone;
-        $("f_rua").value = c.rua;
-        $("f_rua_num").value = c.rua_num;
-        $("f_bairro").value = c.bairro;
-        $("f_cidade").value = c.cidade;
-        $("f_ref").value = c.referencia;
+        // Preenche os campos (observação: usamos c.id ou c.idNum para compatibilidade)
+        $("f_name").value = c.name || "";
+        // corrigido: preencher f_id com c.id (campo livre) ou c.idNum como fallback
+        $("f_id").value = c.id ?? c.idNum ?? "";
+        $("f_wh").value = c.whatsapp || "";
+        $("f_phone").value = c.phone || "";
+        $("f_rua").value = c.rua || "";
+        $("f_rua_num").value = c.rua_num || "";
+        $("f_bairro").value = c.bairro || "";
+        $("f_cidade").value = c.cidade || "";
+        $("f_ref").value = c.referencia || "";
 
         // save those values to suggestions (so they appear later)
         ["f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"].forEach(fid => {
@@ -272,37 +279,42 @@ $("clientsList").onclick = e => {
             saveClients(); renderClients();
         }
     }
-};
+}
 
-$("btnNew").onclick = () => {
+function bindClientsList() {
+    const clist = $("clientsList");
+    if (clist) clist.onclick = clientsListClickHandler;
+}
+
+$("btnNew") && ($("btnNew").onclick = () => {
     editingIndex = null;
 
     // Fecha outras telas e abre só o formulário (pula de tela)
-    $("client-area").style.display = "none";
-    $("product-area").style.display = "none";
-    $("clientFormCard").style.display = "block";
+    if ($("client-area")) $("client-area").style.display = "none";
+    if ($("product-area")) $("product-area").style.display = "none";
+    if ($("clientFormCard")) $("clientFormCard").style.display = "block";
 
     ["f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"]
-        .forEach(id => $(id).value = "");
+        .forEach(id => { if ($(id)) $(id).value = ""; });
 
     // foca no nome
     setTimeout(() => { try { $("f_name").focus(); } catch (e) { } }, 40);
-};
+});
 
-$("closeForm").onclick = () => {
+$("closeForm") && ($("closeForm").onclick = () => {
     // apenas fecha o formulário e volta para lista inicial
     showInitialScreen();
-};
+});
 
-$("cancelClientNew").onclick = () => {
-    selectedClientId = null; 
-    $("selectedLabel").innerText = "Nenhum";
+$("cancelClientNew") && ($("cancelClientNew").onclick = () => {
+    selectedClientId = null;
+    if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
     products = [];
     renderProducts();
     showInitialScreen();
-};
+});
 
-$("saveClientNew").onclick = () => {
+$("saveClientNew") && ($("saveClientNew").onclick = () => {
 
     const name = $("f_name").value.trim();
     if (!name) return alert("Nome obrigatório");
@@ -324,10 +336,15 @@ $("saveClientNew").onclick = () => {
         addSuggestion(mapField(fid), $(fid).value);
     });
 
-    if (editingIndex !== null) {
-        // editar cliente existente: mantém purchases existentes se houver
-        const existing = clients[editingIndex] || { purchases: [] };
-        clients[editingIndex] = { ...existing, ...obj, purchases: existing.purchases || [] };
+    if (editingIndex !== null && typeof editingIndex !== "undefined") {
+        // editar cliente existente: mantém purchases existentes e idNum
+        const existing = clients[editingIndex] || { purchases: [], idNum: newId() };
+        clients[editingIndex] = {
+            ...existing,
+            ...obj,
+            idNum: existing.idNum, // preserva o idNum
+            purchases: existing.purchases || []
+        };
         saveClients(); renderClients();
 
         // volta para tela inicial (lista)
@@ -343,14 +360,14 @@ $("saveClientNew").onclick = () => {
 
     // volta para tela inicial (lista) após criar
     showInitialScreen();
-};
+});
 
-$("backClient").onclick = () => {
+$("backClient") && ($("backClient").onclick = () => {
     // quando clicar voltar na tela de produtos, volta para lista
     showInitialScreen();
-};
+});
 
-$("addProd").onclick = () => {
+$("addProd") && ($("addProd").onclick = () => {
     const desc = $("prod_desc").value.trim();
     let price = parseFloat(String($("prod_price").value || "0").replace(",", "."));
     if (!desc) return alert("Digite o produto");
@@ -364,24 +381,28 @@ $("addProd").onclick = () => {
 
     $("prod_desc").value = "";
     $("prod_price").value = "";
-};
+});
 
 function renderProducts() {
     const list = $("prodList");
+    if (!list) return;
     if (products.length === 0) {
         list.innerHTML = '<div class="muted">Nenhum produto adicionado</div>';
         return;
     }
 
-    list.innerHTML = products.map((p, i) => `
-    <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding:6px 0;">
-      <span>${escapeHtml(p.desc)}</span>
-      <span>
-        R$ ${p.price.toFixed(2).replace(".", ",")}
-        <button class="ghost small-btn" onclick="removeProd(${i})">x</button>
-      </span>
-    </div>
-  `).join("");
+    list.innerHTML = products.map((p, i) => {
+        const priceNum = Number(p.price) || 0;
+        return `
+        <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding:6px 0;">
+          <span>${escapeHtml(p.desc)}</span>
+          <span>
+            R$ ${priceNum.toFixed(2).replace(".", ",")}
+            <button class="ghost small-btn" onclick="removeProd(${i})">x</button>
+          </span>
+        </div>
+      `;
+    }).join("");
 }
 function removeProd(i) {
     products.splice(i, 1);
@@ -393,13 +414,13 @@ const payBtns = document.querySelectorAll(".pay-btn");
 function ativar(btn, texto) {
     payBtns.forEach(x => x.classList.remove("active"));
     btn.classList.add("active");
-    $("note").value = texto;
+    if ($("note")) $("note").value = texto;
     addSuggestion("note", texto); // save note suggestion when activated
 }
 
-$("btnPix").onclick = () => ativar($("btnPix"), "PIX");
-$("btnCard").onclick = () => ativar($("btnCard"), "CARTÃO");
-$("btnCash").onclick = () => ativar($("btnCash"), "DINHEIRO");
+$("btnPix") && ($("btnPix").onclick = () => ativar($("btnPix"), "PIX"));
+$("btnCard") && ($("btnCard").onclick = () => ativar($("btnCard"), "CARTÃO"));
+$("btnCash") && ($("btnCash").onclick = () => ativar($("btnCash"), "DINHEIRO"));
 
 /* monta a nota para impressão (fonte 12px, espaçamento simples) */
 function buildPrint(obj) {
@@ -409,8 +430,8 @@ function buildPrint(obj) {
     if (Array.isArray(produtos) && produtos.length > 0) {
         lista = produtos.map(p => {
             const desc = p.desc || "";
-            const price = typeof p.price === "number" ? p.price : parseFloat(String(p.price || "0").replace(",", "."));
-            const priceText = isNaN(price) ? "0,00" : price.toFixed(2).replace(".", ",");
+            const price = Number(p.price) || 0;
+            const priceText = price.toFixed(2).replace(".", ",");
             return `
         <div style="display:flex; justify-content:space-between; margin-bottom:2px; font-size:12px;">
           <span style="max-width:62mm; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(desc)}</span>
@@ -424,10 +445,10 @@ function buildPrint(obj) {
 
     const rua = client && client.rua ? `${client.rua}${client.rua_num ? ", Nº " + client.rua_num : ""}` : "";
 
-    const feeNum = typeof fee === "number" ? fee : parseFloat(String(fee || "0").replace(",", ".")) || 0;
-    const totalNum = typeof total === "number" ? total : parseFloat(String(total || "0").replace(",", ".")) || 0;
-    const feeText = isNaN(feeNum) ? "0,00" : feeNum.toFixed(2).replace(".", ",");
-    const totalText = isNaN(totalNum) ? "0,00" : totalNum.toFixed(2).replace(".", ",");
+    const feeNum = Number(fee) || 0;
+    const totalNum = Number(total) || 0;
+    const feeText = feeNum.toFixed(2).replace(".", ",");
+    const totalText = totalNum.toFixed(2).replace(".", ",");
 
     return `
     <div class="no-break" style="width:80mm;font-family:monospace;padding:3px; white-space:normal; font-size:12px; line-height:1;">
@@ -481,9 +502,9 @@ function savePurchaseToClient(clientId, { produtos, fee, total, note, date }) {
     const entry = {
         id: Date.now(),
         date,
-        produtos: (produtos || []).map(p => ({ desc: p.desc, price: p.price })),
-        fee,
-        total,
+        produtos: (produtos || []).map(p => ({ desc: p.desc, price: Number(p.price) || 0 })),
+        fee: Number(fee) || 0,
+        total: Number(total) || 0,
         note
     };
     clients[idx].purchases = clients[idx].purchases || [];
@@ -492,12 +513,12 @@ function savePurchaseToClient(clientId, { produtos, fee, total, note, date }) {
     return entry;
 }
 
-$("printBtn").onclick = () => {
+$("printBtn") && ($("printBtn").onclick = () => {
 
     const client = clients.find(c => c.idNum === selectedClientId);
     if (!client) return alert("Selecione um cliente");
 
-    const soma = products.reduce((s, p) => s + (typeof p.price === "number" ? p.price : parseFloat(String(p.price).replace(",", ".")) || 0), 0);
+    const soma = products.reduce((s, p) => s + (Number(p.price) || 0), 0);
     let fee = parseFloat(String($("fee").value || "0").replace(",", "."));
     if (isNaN(fee)) fee = 0;
 
@@ -540,12 +561,13 @@ $("printBtn").onclick = () => {
     // limpa produtos e seleção depois de salvar/imprimir
     products = [];
     renderProducts();
-};
+});
 
 /* HISTÓRICO: abrir modal */
 function openHistory(index) {
     const client = clients[index];
     const out = $("historyContent");
+    if (!out) return;
     out.innerHTML = "";
 
     if (!client.purchases || client.purchases.length === 0) {
@@ -578,11 +600,11 @@ function openHistory(index) {
 
     // guarda index para ações
     out.dataset.index = index;
-    $("historyModal").style.display = "flex";
+    if ($("historyModal")) $("historyModal").style.display = "flex";
 }
 
 /* ações dentro do modal (delegation) */
-$("historyContent").onclick = function (e) {
+$("historyContent") && ($("historyContent").onclick = function (e) {
     const b = e.target.closest("button"); if (!b) return;
     const action = b.dataset.action;
     const clientId = Number(b.dataset.client);
@@ -620,45 +642,56 @@ $("historyContent").onclick = function (e) {
         });
 
        requestAnimationFrame(() => {
-    window.print();
-    setTimeout(() => {
-        $("print-area").innerHTML = "";
+            window.print();
+            setTimeout(() => {
+                $("print-area").innerHTML = "";
 
-        // 🔹 Botão "Voltar ao início"
-        const backBtn = document.createElement("button");
-        backBtn.textContent = "Voltar ao início";
-        backBtn.className = "small-btn";
-        backBtn.style.marginTop = "14px";
-        backBtn.style.position = "fixed";
-        backBtn.style.bottom = "20px";
-        backBtn.style.right = "20px";
-        backBtn.style.zIndex = "99999";
+                // 🔹 Botão "Voltar ao início"
+                const backBtn = document.createElement("button");
+                backBtn.textContent = "Voltar ao início";
+                backBtn.className = "small-btn";
+                backBtn.style.marginTop = "14px";
+                backBtn.style.position = "fixed";
+                backBtn.style.bottom = "20px";
+                backBtn.style.right = "20px";
+                backBtn.style.zIndex = "99999";
 
-        backBtn.onclick = () => {
-            selectedClientId = null;                 // limpa seleção do cliente
-            $("selectedLabel").innerText = "Nenhum"; // reseta o texto
-            showInitialScreen();                    // volta para lista completa
-            backBtn.remove();                       // remove o botão
-        };
+                backBtn.onclick = () => {
+                    selectedClientId = null;                 // limpa seleção do cliente
+                    if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum"; // reseta o texto
+                    showInitialScreen();                    // volta para lista completa
+                    backBtn.remove();                       // remove o botão
+                };
 
-        document.body.appendChild(backBtn);
+                document.body.appendChild(backBtn);
 
-    }, 700);
-});
+            }, 700);
+        });
 
         return;
     }
-};
+});
 
-$("closeHistory").onclick = () => { $("historyModal").style.display = "none"; }
-document.getElementById("historyModal").onclick = (e) => { if (e.target.id === "historyModal") $("historyModal").style.display = "none"; }
+$("closeHistory") && ($("closeHistory").onclick = () => { if ($("historyModal")) $("historyModal").style.display = "none"; });
+document.getElementById("historyModal") && (document.getElementById("historyModal").onclick = (e) => { if (e.target.id === "historyModal") $("historyModal").style.display = "none"; });
 
-$("searchName").oninput = () => renderClients($("searchName").value, $("searchId").value);
-$("searchId").oninput = () => renderClients($("searchName").value, $("searchId").value);
+$("searchName") && ($("searchName").oninput = () => renderClients($("searchName").value, $("searchId").value));
+$("searchId") && ($("searchId").oninput = () => renderClients($("searchName").value, $("searchId").value));
+
+/* DOM ready wrapper to be mais robusto */
+function domReady(fn) {
+    if (document.readyState === "complete" || document.readyState === "interactive") {
+        setTimeout(fn, 1);
+    } else {
+        document.addEventListener("DOMContentLoaded", fn);
+    }
+}
 
 /* initial render and attach listeners for suggestions */
-renderClients();
-renderProducts();
-renderAllDatalists();
-attachSuggestionListeners();
-
+domReady(() => {
+    renderClients();
+    renderProducts();
+    renderAllDatalists();
+    attachSuggestionListeners();
+    bindClientsList();
+});
