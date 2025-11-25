@@ -1,5 +1,5 @@
 /* ========== VARIÁVEIS GLOBAIS ========== */
-let clients = JSON.parse(localStorage.getItem("nota_entrega_clients_v1") || "[]");
+let clients = [];
 let products = [];
 let selectedClientId = null;
 let editingIndex = null;
@@ -8,6 +8,8 @@ const $ = id => document.getElementById(id);
 // PAGINAÇÃO - variáveis (declaradas; implementação da paginação ficará a parte)
 let currentClientsPage = 1;
 const clientsPageSize = 20; // máximo 20 clientes por página
+let lastClientsSearchName = "";
+let lastClientsSearchId = "";
 
 let currentHistoryPage = 1;
 const historyPageSize = 10; // máximo 10 items por página
@@ -97,7 +99,7 @@ function attachSuggestionListeners() {
         el.addEventListener("keydown", (e) => {
             if (e.key === "Enter") {
                 addSuggestion(mapField(id), el.value);
-                // if product desc and on product area, prevent form submit and add product
+                // se for produto, já adiciona
                 if (id === "prod_desc") { e.preventDefault(); try { $("addProd").click(); } catch (e) { } }
             }
         });
@@ -106,8 +108,6 @@ function attachSuggestionListeners() {
 
 /* normalize mapping of input ids to suggestion keys */
 function mapField(inputId) {
-    // uses same names as datalist ids without the s_
-    // map prod inputs to prod_*
     const map = {
         searchName: "searchName",
         searchId: "searchId",
@@ -119,16 +119,23 @@ function mapField(inputId) {
     return map[inputId] || inputId;
 }
 
-/* ========== persistence of clients (unchanged) ========== */
+/* ========== persistence of clients ========== */
+// agora clients e histórico NÃO são mais salvos em localStorage
 function saveClients() {
-    localStorage.setItem("nota_entrega_clients_v1", JSON.stringify(clients));
+    // intencionalmente vazio – usamos apenas o Supabase para persistência
 }
 
 function now() {
     const d = new Date(), p = n => String(n).padStart(2, "0");
     return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
-
+function formatDateTime(input) {
+    if (!input) return "";
+    const d = new Date(input);
+    if (isNaN(d)) return String(input); // se não conseguir converter, devolve do jeito que veio
+    const p = n => String(n).padStart(2, "0");
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 /* ensures purchases field exists */
 function ensurePurchasesField() {
     let changed = false;
@@ -141,25 +148,7 @@ function ensurePurchasesField() {
 
 ensurePurchasesField();
 
-// ---------- MELHOR OPÇÃO: criar cliente exemplo apenas NA PRIMEIRA EXECUÇÃO ----------
-const INIT_KEY = "nota_entrega_initialized_v1";
-if (!localStorage.getItem(INIT_KEY)) {
-    if (!clients || clients.length === 0) {
-        clients = [{
-            idNum: 1,
-            name: "Aline Alves",
-            whatsapp: "48 98403-6299",
-            rua: "Av. Caetano Silveira",
-            rua_num: "901",
-            bairro: "Brejaru",
-            cidade: "Palhoça",
-            purchases: []
-        }];
-        saveClients();
-    }
-    localStorage.setItem(INIT_KEY, "1");
-}
-// -----------------------------------------------------------------------------------
+// ---------- REMOVIDO: cliente exemplo no localStorage ----------
 
 function newId() {
     const ids = clients.map(c => c.idNum).sort((a, b) => a - b);
@@ -168,7 +157,6 @@ function newId() {
 }
 
 function showInitialScreen() {
-    // mostra a lista inicial
     if ($("client-area")) $("client-area").style.display = "block";
     if ($("product-area")) $("product-area").style.display = "none";
     if ($("clientFormCard")) $("clientFormCard").style.display = "none";
@@ -176,17 +164,89 @@ function showInitialScreen() {
     if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
 }
 
+/* ========== PAGINAÇÃO: função que renderiza a barra de paginação ==========
+   (cole ou deixe esta função em qualquer lugar fora da renderClients)
+*/
+function renderClientsPagination(totalPages) {
+    const pag = $("clientsPagination");
+    if (!pag) return;
+
+    if (totalPages <= 1) {
+        pag.innerHTML = "";
+        pag.style.display = "none";
+        return;
+    }
+
+    pag.style.display = "flex";
+    pag.style.alignItems = "center";
+    pag.style.justifyContent = "center";
+    pag.style.gap = "6px";
+    pag.style.marginTop = "8px";
+
+    const prevDisabled = currentClientsPage <= 1 ? "disabled" : "";
+    const nextDisabled = currentClientsPage >= totalPages ? "disabled" : "";
+
+    pag.innerHTML = `
+      <button id="clientsPgPrev" class="ghost small-btn" ${prevDisabled}>&lt;</button>
+      <span id="clientsPgInfo" style="font-size:12px;">Página ${currentClientsPage} de ${totalPages}</span>
+      <button id="clientsPgNext" class="ghost small-btn" ${nextDisabled}>&gt;</button>
+    `;
+
+    const prevBtn = document.getElementById("clientsPgPrev");
+    const nextBtn = document.getElementById("clientsPgNext");
+
+    if (prevBtn) prevBtn.onclick = () => {
+        if (currentClientsPage > 1) {
+            currentClientsPage--;
+            renderClients(lastClientsSearchName, lastClientsSearchId);
+            const box = $("clientsList");
+            if (box) box.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    };
+    if (nextBtn) nextBtn.onclick = () => {
+        if (currentClientsPage < totalPages) {
+            currentClientsPage++;
+            renderClients(lastClientsSearchName, lastClientsSearchId);
+            const box = $("clientsList");
+            if (box) box.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    };
+}
+
+/* ========== LISTAGEM + PAGINAÇÃO DE CLIENTES ========== */
 function renderClients(name = "", id = "") {
     const box = $("clientsList");
     if (!box) return;
     box.innerHTML = "";
 
-    name = name.toLowerCase();
+    lastClientsSearchName = name || "";
+    lastClientsSearchId = id || "";
 
-    clients.forEach((c, i) => {
-        if (name && !c.name.toLowerCase().includes(name)) return;
-        if (id && String(c.idNum) !== id) return;
+    const searchName = (name || "").toLowerCase().trim();
+    const searchId = (id || "").trim();
 
+    // filtra os clientes
+    const filtered = clients.filter(c => {
+        if (searchName && !String(c.name || "").toLowerCase().includes(searchName)) return false;
+        if (searchId && String(c.idNum) !== searchId) return false;
+        return true;
+    });
+
+    // DEBUG opcional
+    console.log('renderClients -> filtered:', filtered.length, 'pageSize:', clientsPageSize, 'currentPage:', currentClientsPage);
+
+    // calcula páginas
+    const totalPages = Math.max(1, Math.ceil(filtered.length / clientsPageSize) || 1);
+
+    if (currentClientsPage > totalPages) currentClientsPage = totalPages;
+    if (currentClientsPage < 1) currentClientsPage = 1;
+
+    const start = (currentClientsPage - 1) * clientsPageSize;
+    const end = start + clientsPageSize;
+    const pageItems = filtered.slice(start, end);
+
+    // monta a lista da página atual
+    pageItems.forEach((c) => {
         const rua = c.rua ? `${c.rua}${c.rua_num ? ", Nº " + c.rua_num : ""}` : "";
 
         const div = document.createElement("div");
@@ -202,19 +262,23 @@ function renderClients(name = "", id = "") {
       </div>
 
       <div style="display:flex; gap:6px;">
-        <button class="ghost small-btn" data-a="edit" data-i="${i}">Editar</button>
-        <button class="small-btn" data-a="select" data-i="${i}">Selecionar</button>
-        <button class="ghost small-btn" data-a="history" data-i="${i}">Histórico</button>
-        <button class="ghost small-btn" data-a="del" data-i="${i}">Excluir</button>
+        <button class="ghost small-btn" data-a="edit" data-i="${clients.indexOf(c)}">Editar</button>
+        <button class="small-btn" data-a="select" data-i="${clients.indexOf(c)}">Selecionar</button>
+        <button class="ghost small-btn" data-a="history" data-i="${clients.indexOf(c)}">Histórico</button>
+        <button class="ghost small-btn" data-a="del" data-i="${clients.indexOf(c)}">Excluir</button>
       </div>
     `;
         box.appendChild(div);
     });
 
-    if (!box.innerHTML)
+    if (!pageItems.length) {
         box.innerHTML = '<div class="muted">Nenhum cliente encontrado</div>';
+    }
 
-    // refresh suggestion lists for convenience
+    // chama a renderização da barra de paginação
+    renderClientsPagination(totalPages);
+
+    // atualiza datalists de busca (baseados em todos os clients)
     const names = clients.map(c => c.name).filter(Boolean).slice().reverse();
     const dlsn = $("s_searchName"); if (dlsn) dlsn.innerHTML = names.map(n => `<option value="${escapeHtmlAttr(n)}">`).join("");
     const ids = clients.map(c => c.idNum).filter(Boolean).slice().reverse();
@@ -241,16 +305,11 @@ function clientsListClickHandler(e) {
     if (a === "edit") {
         editingIndex = i;
 
-        // Fecha telas anteriores (pula de tela)
         if ($("client-area")) $("client-area").style.display = "none";
         if ($("product-area")) $("product-area").style.display = "none";
-
-        // Abre somente o formulário de edição
         if ($("clientFormCard")) $("clientFormCard").style.display = "block";
 
-        // Preenche os campos (observação: usamos c.id ou c.idNum para compatibilidade)
         $("f_name").value = c.name || "";
-        // corrigido: preencher f_id com c.id (campo livre) ou c.idNum como fallback
         $("f_id").value = c.id ?? c.idNum ?? "";
         $("f_wh").value = c.whatsapp || "";
         $("f_phone").value = c.phone || "";
@@ -260,7 +319,6 @@ function clientsListClickHandler(e) {
         $("f_cidade").value = c.cidade || "";
         $("f_ref").value = c.referencia || "";
 
-        // save those values to suggestions (so they appear later)
         ["f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"].forEach(fid => {
             addSuggestion(mapField(fid), $(fid).value);
         });
@@ -271,14 +329,50 @@ function clientsListClickHandler(e) {
 
     if (a === "history") {
         openHistory(i);
+        return;
     }
 
     if (a === "del") {
-        if (confirm("Excluir cliente? (o histórico será removido junto)")) {
-            clients.splice(i, 1);
-            saveClients(); renderClients();
+        if (!confirm("Excluir cliente? (o histórico será removido do banco também)")) return;
+
+        const clientIdNum = c.idNum;   // 👈 ADIÇÃO: guardar o idnum do cliente
+
+        // remove da lista em memória e atualiza a tela
+        clients.splice(i, 1);
+
+        // ajustar página atual se necessário
+        const maxPages = Math.max(1, Math.ceil(clients.length / clientsPageSize) || 1);
+        if (currentClientsPage > maxPages) currentClientsPage = maxPages;
+
+        renderClients(lastClientsSearchName, lastClientsSearchId);
+
+        // 👇 ADIÇÃO: apagar no Supabase em background
+        if (window.supabase) {
+            window.supabase
+                .from('historico')
+                .delete()
+                .eq('cliente_indu', clientIdNum)
+                .then(({ error }) => {
+                    if (error) {
+                        console.error("Erro ao apagar histórico do cliente no Supabase:", error);
+                    }
+                });
+
+            // 2) apaga o próprio cliente
+            window.supabase
+                .from('clientes')
+                .delete()
+                .eq('idnum', clientIdNum)
+                .then(({ error }) => {
+                    if (error) {
+                        console.error("Erro ao apagar cliente no Supabase:", error);
+                    }
+                });
         }
+
+        return;
     }
+
 }
 
 function bindClientsList() {
@@ -289,7 +383,6 @@ function bindClientsList() {
 $("btnNew") && ($("btnNew").onclick = () => {
     editingIndex = null;
 
-    // Fecha outras telas e abre só o formulário (pula de tela)
     if ($("client-area")) $("client-area").style.display = "none";
     if ($("product-area")) $("product-area").style.display = "none";
     if ($("clientFormCard")) $("clientFormCard").style.display = "block";
@@ -297,12 +390,10 @@ $("btnNew") && ($("btnNew").onclick = () => {
     ["f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"]
         .forEach(id => { if ($(id)) $(id).value = ""; });
 
-    // foca no nome
     setTimeout(() => { try { $("f_name").focus(); } catch (e) { } }, 40);
 });
 
 $("closeForm") && ($("closeForm").onclick = () => {
-    // apenas fecha o formulário e volta para lista inicial
     showInitialScreen();
 });
 
@@ -314,7 +405,8 @@ $("cancelClientNew") && ($("cancelClientNew").onclick = () => {
     showInitialScreen();
 });
 
-$("saveClientNew") && ($("saveClientNew").onclick = () => {
+/* ========== SALVAR CLIENTE (AGORA NO SUPABASE) ========== */
+$("saveClientNew") && ($("saveClientNew").onclick = async () => {
 
     const name = $("f_name").value.trim();
     if (!name) return alert("Nome obrigatório");
@@ -331,39 +423,91 @@ $("saveClientNew") && ($("saveClientNew").onclick = () => {
         referencia: $("f_ref").value
     };
 
-    // save suggestions for each field user entered
-    ["f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"].forEach(fid => {
+    ["f_name", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"].forEach(fid => {
         addSuggestion(mapField(fid), $(fid).value);
     });
 
+    // EDITAR CLIENTE EXISTENTE
     if (editingIndex !== null && typeof editingIndex !== "undefined") {
-        // editar cliente existente: mantém purchases existentes e idNum
         const existing = clients[editingIndex] || { purchases: [], idNum: newId() };
-        clients[editingIndex] = {
+        const updated = {
             ...existing,
             ...obj,
-            idNum: existing.idNum, // preserva o idNum
+            idNum: existing.idNum,
             purchases: existing.purchases || []
         };
-        saveClients(); renderClients();
 
-        // volta para tela inicial (lista)
+        const { error } = await window.supabase
+            .from('clientes')
+            .update({
+                idnum: updated.idNum,
+                nome: updated.name,
+                whatsapp: updated.whatsapp,
+                telefone: updated.phone,
+                rua: updated.rua,
+                rua_num: updated.rua_num,
+                bairro: updated.bairro,
+                cidade: updated.cidade,
+                referencia: updated.referencia
+            })
+            .eq('idnum', updated.idNum);
+
+        if (error) {
+            console.error("Erro ao atualizar cliente no Supabase:", error);
+            alert("Erro ao atualizar no banco: " + (error.message || ""));
+            return;
+        }
+
+        clients[editingIndex] = updated;
+        renderClients(lastClientsSearchName, lastClientsSearchId);
         showInitialScreen();
         return;
     }
 
-    // novo cliente
+    // NOVO CLIENTE
     obj.idNum = newId();
     obj.purchases = [];
-    clients.push(obj);
-    saveClients(); renderClients();
 
-    // volta para tela inicial (lista) após criar
+    const { data, error } = await window.supabase
+        .from('clientes')
+        .insert([{
+            idnum: obj.idNum,
+            nome: obj.name,
+            whatsapp: obj.whatsapp,
+            telefone: obj.phone,
+            rua: obj.rua,
+            rua_num: obj.rua_num,
+            bairro: obj.bairro,
+            cidade: obj.cidade,
+            referencia: obj.referencia
+        }])
+        .select();
+
+    if (error) {
+        console.error("message:", error.message);
+        console.error("details:", error.details);
+        console.error("hint:", error.hint);
+        console.error("code:", error.code);
+        console.error("full:", error);
+        alert("Erro ao salvar no banco: " + (error?.message || ""));
+        return;
+    }
+
+    const row = data && data[0];
+    if (row) {
+        clients.push({
+            ...obj,
+            idNum: row.idnum ?? obj.idNum
+        });
+    } else {
+        clients.push(obj);
+    }
+
+    renderClients(lastClientsSearchName, lastClientsSearchId);
     showInitialScreen();
 });
 
 $("backClient") && ($("backClient").onclick = () => {
-    // quando clicar voltar na tela de produtos, volta para lista
     showInitialScreen();
 });
 
@@ -375,7 +519,6 @@ $("addProd") && ($("addProd").onclick = () => {
     products.push({ desc, price });
     renderProducts();
 
-    // save suggestions for product and price
     addSuggestion("prod_desc", desc);
     if ($("prod_price").value) addSuggestion("prod_price", $("prod_price").value);
 
@@ -404,6 +547,7 @@ function renderProducts() {
       `;
     }).join("");
 }
+
 function removeProd(i) {
     products.splice(i, 1);
     renderProducts();
@@ -415,14 +559,14 @@ function ativar(btn, texto) {
     payBtns.forEach(x => x.classList.remove("active"));
     btn.classList.add("active");
     if ($("note")) $("note").value = texto;
-    addSuggestion("note", texto); // save note suggestion when activated
+    addSuggestion("note", texto);
 }
 
 $("btnPix") && ($("btnPix").onclick = () => ativar($("btnPix"), "PIX"));
 $("btnCard") && ($("btnCard").onclick = () => ativar($("btnCard"), "CARTÃO"));
 $("btnCash") && ($("btnCash").onclick = () => ativar($("btnCash"), "DINHEIRO"));
 
-/* monta a nota para impressão (fonte 12px, espaçamento simples) */
+/* monta a nota para impressão */
 function buildPrint(obj) {
     const { produtos, fee, total, client, note, date } = obj;
 
@@ -476,13 +620,14 @@ function buildPrint(obj) {
 
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
 
-      <b>Cliente:</b>
-      <div style="margin:2px 0;">${escapeHtml(client && client.name ? client.name : "")}</div>
-      <div style="margin:2px 0;">Rua: ${escapeHtml(rua)}</div>
-      <div style="margin:2px 0;">Bairro: ${escapeHtml(client && client.bairro ? client.bairro : "")}</div>
-      <div style="margin:2px 0;">Cidade: ${escapeHtml(client && client.cidade ? client.cidade : "")}</div>
-      <div style="margin:2px 0;">Whats: ${escapeHtml(client && client.whatsapp ? client.whatsapp : "")}</div>
-      <div style="margin:2px 0;">Tel: ${escapeHtml(client && client.phone ? client.phone : "")}</div>
+     <b style="font-size:12px;">Cliente:</b>
+<div style="margin:2px 0; font-size:11px;"><b>Nome:</b> ${escapeHtml(client?.name || "")}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Rua:</b> ${escapeHtml(rua)}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Bairro:</b> ${escapeHtml(client?.bairro || "")}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Cidade:</b> ${escapeHtml(client?.cidade || "")}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Whats:</b> ${escapeHtml(client?.whatsapp || "")}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Tel:</b> ${escapeHtml(client?.phone || "")}</div>
+
 
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
 
@@ -502,24 +647,111 @@ function buildPrint(obj) {
   `;
 }
 
-/* save purchase to client history */
-function savePurchaseToClient(clientId, { produtos, fee, total, note, date }) {
-    const idx = clients.findIndex(c => c.idNum === clientId);
-    if (idx === -1) return null;
-    const entry = {
-        id: Date.now(),
-        date,
-        produtos: (produtos || []).map(p => ({ desc: p.desc, price: Number(p.price) || 0 })),
-        fee: Number(fee) || 0,
-        total: Number(total) || 0,
-        note
-    };
-    clients[idx].purchases = clients[idx].purchases || [];
-    clients[idx].purchases.unshift(entry);
-    saveClients();
-    return entry;
+/* salvar compra no histórico (Supabase + memória) */
+function savePurchaseToClient(clientIdNum, purchaseData) {
+    try {
+        const purchase = {
+            id: Date.now(),
+            clientIdNum,
+            date: purchaseData.date,
+            produtos: purchaseData.produtos || [],
+            fee: purchaseData.fee || 0,
+            total: purchaseData.total || 0,
+            note: purchaseData.note || ""
+        };
+
+        const idx = clients.findIndex(c => c.idNum === clientIdNum);
+        if (idx !== -1) {
+            if (!Array.isArray(clients[idx].purchases)) {
+                clients[idx].purchases = [];
+            }
+            clients[idx].purchases.push(purchase);
+        }
+
+        const payload = {
+            cliente_indu: clientIdNum,
+            produto: JSON.stringify(purchaseData.produtos || []),
+            taxaentrega: purchaseData.fee || 0,
+            total: purchaseData.total || 0,
+            obs: purchaseData.note || ""
+        };
+
+        window.supabase
+            .from('historico')
+            .insert([payload])
+            .select()
+            .then(({ data, error }) => {
+                if (error) {
+                    const msg = String(error.message || "");
+                    if (msg.includes("Failed to execute 'print' on 'Window'")) {
+                        console.warn("Aviso: erro de print capturado no resultado do Supabase (ignorado):", error);
+                    } else {
+                        console.error("Erro ao salvar histórico no Supabase:", error);
+                    }
+                } else {
+                    console.log("Histórico salvo com sucesso:", data);
+                }
+            })
+            .catch(err => {
+                console.error("Exceção ao salvar histórico (Promise):", err);
+            });
+
+        return purchase;
+    } catch (err) {
+        console.error("Exceção ao salvar histórico:", err);
+        return null;
+    }
 }
 
+/* carrega histórico do Supabase e coloca em clients[i].purchases */
+async function loadHistoryIntoClients() {
+    try {
+        const { data, error } = await window.supabase
+            .from('historico')
+            .select('*')
+            .order('id', { ascending: true });
+
+        if (error) {
+            console.error("Erro ao buscar histórico no Supabase:", error);
+            return;
+        }
+
+        if (!Array.isArray(data)) return;
+
+        clients.forEach(c => { c.purchases = []; });
+
+        data.forEach(row => {
+            const client = clients.find(c => String(c.idNum) === String(row.cliente_indu));
+            if (!client) return;
+
+            if (!Array.isArray(client.purchases)) client.purchases = [];
+
+            let produtos = [];
+            if (row.produto) {
+                try {
+                    produtos = JSON.parse(row.produto);
+                } catch (e) {
+                    console.error("Erro ao fazer parse de produto do histórico:", e, row.produto);
+                }
+            }
+
+            client.purchases.push({
+                id: row.id,
+                clientIdNum: row.cliente_indu,
+                date: formatDateTime(row.created_at) || "",
+                produtos,
+                fee: row.taxaentrega || 0,
+                total: row.total || 0,
+                note: row.obs || ""
+            });
+        });
+
+    } catch (e) {
+        console.error("Exceção ao carregar histórico do Supabase:", e);
+    }
+}
+
+/* botão imprimir / registrar compra */
 $("printBtn") && ($("printBtn").onclick = () => {
 
     const client = clients.find(c => c.idNum === selectedClientId);
@@ -531,11 +763,9 @@ $("printBtn") && ($("printBtn").onclick = () => {
 
     const total = soma + fee;
 
-    // save suggestion for fee and note
     if ($("fee").value) addSuggestion("fee", $("fee").value);
     if ($("note").value) addSuggestion("note", $("note").value);
 
-    // salva no histórico (snapshot) ANTES de imprimir
     const saved = savePurchaseToClient(client.idNum, {
         produtos: products,
         fee,
@@ -544,28 +774,25 @@ $("printBtn") && ($("printBtn").onclick = () => {
         date: now()
     });
 
-    // popula área de impressão (passando a venda como id do saved)
     $("print-area").innerHTML = buildPrint({
         date: now(),
         produtos: products,
-        fee, total,
+        fee,
+        total,
         client,
-        note: $("note").value,
+        note: $("note") ? $("note").value : "",
         venda: saved ? saved.id : ""
     });
 
-    // força render antes de chamar print
-    requestAnimationFrame(() => {
+    try {
         window.print();
-        // limpa após curto período
-        setTimeout(() => {
-            $("print-area").innerHTML = "";
-            // depois de finalizar a impressão, volta para a tela inicial
-            showInitialScreen();
-        }, 700);
-    });
+    } catch (err) {
+        console.error("Erro ao chamar window.print:", err);
+    }
 
-    // limpa produtos e seleção depois de salvar/imprimir
+    $("print-area").innerHTML = "";
+    showInitialScreen();
+
     products = [];
     renderProducts();
 });
@@ -605,7 +832,6 @@ function openHistory(index) {
         });
     }
 
-    // guarda index para ações
     out.dataset.index = index;
     if ($("historyModal")) $("historyModal").style.display = "flex";
 }
@@ -622,21 +848,35 @@ $("historyContent") && ($("historyContent").onclick = function (e) {
 
     if (action === "del") {
         if (!confirm("Excluir este registro do histórico?")) return;
-        const arr = clients[cidx].purchases || [];
-        const newArr = arr.filter(x => x.id !== pid);
-        clients[cidx].purchases = newArr;
-        saveClients();
-        // re-open modal to refresh
-        openHistory(cidx);
+
+        // APAGA DO SUPABASE
+        window.supabase
+            .from('historico')
+            .delete()
+            .eq('id', pid)
+            .then(({ error }) => {
+                if (error) {
+                    console.error("Erro ao apagar histórico no Supabase:", error);
+                    alert("Erro ao apagar no banco.");
+                    return;
+                }
+
+                // APAGA NA MEMÓRIA
+                const arr = clients[cidx].purchases || [];
+                clients[cidx].purchases = arr.filter(x => x.id !== pid);
+
+                // RECARREGA O MODAL
+                openHistory(cidx);
+            });
+
         return;
     }
 
+
     if (action === "view") {
-        // imprimir somente essa nota do histórico
         const entry = (clients[cidx].purchases || []).find(x => x.id === pid);
         if (!entry) return alert("Registro não encontrado");
 
-        // montar print com os dados do entry
         const fakeClient = clients[cidx];
         $("print-area").innerHTML = buildPrint({
             date: entry.date,
@@ -648,12 +888,11 @@ $("historyContent") && ($("historyContent").onclick = function (e) {
             venda: entry.id
         });
 
-       requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
             window.print();
             setTimeout(() => {
                 $("print-area").innerHTML = "";
 
-                // 🔹 Botão "Voltar ao início"
                 const backBtn = document.createElement("button");
                 backBtn.textContent = "Voltar ao início";
                 backBtn.className = "small-btn";
@@ -664,10 +903,10 @@ $("historyContent") && ($("historyContent").onclick = function (e) {
                 backBtn.style.zIndex = "99999";
 
                 backBtn.onclick = () => {
-                    selectedClientId = null;                 // limpa seleção do cliente
-                    if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum"; // reseta o texto
-                    showInitialScreen();                    // volta para lista completa
-                    backBtn.remove();                       // remove o botão
+                    selectedClientId = null;
+                    if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
+                    showInitialScreen();
+                    backBtn.remove();
                 };
 
                 document.body.appendChild(backBtn);
@@ -682,10 +921,11 @@ $("historyContent") && ($("historyContent").onclick = function (e) {
 $("closeHistory") && ($("closeHistory").onclick = () => { if ($("historyModal")) $("historyModal").style.display = "none"; });
 document.getElementById("historyModal") && (document.getElementById("historyModal").onclick = (e) => { if (e.target.id === "historyModal") $("historyModal").style.display = "none"; });
 
-$("searchName") && ($("searchName").oninput = () => renderClients($("searchName").value, $("searchId").value));
-$("searchId") && ($("searchId").oninput = () => renderClients($("searchName").value, $("searchId").value));
+/* Ajuste: buscas devem resetar a paginação para 1 */
+$("searchName") && ($("searchName").oninput = () => { currentClientsPage = 1; renderClients($("searchName").value, $("searchId").value); });
+$("searchId") && ($("searchId").oninput = () => { currentClientsPage = 1; renderClients($("searchName").value, $("searchId").value); });
 
-/* DOM ready wrapper to be mais robusto */
+/* DOM ready wrapper */
 function domReady(fn) {
     if (document.readyState === "complete" || document.readyState === "interactive") {
         setTimeout(fn, 1);
@@ -696,9 +936,41 @@ function domReady(fn) {
 
 /* initial render and attach listeners for suggestions */
 domReady(() => {
-    renderClients();
-    renderProducts();
-    renderAllDatalists();
-    attachSuggestionListeners();
-    bindClientsList();
+    (async () => {
+        try {
+            const { data, error } = await window.supabase
+                .from('clientes')
+                .select('*')
+                .order('id', { ascending: true });
+
+            if (!error && Array.isArray(data)) {
+                clients = data.map(c => {
+                    return {
+                        id: c.id || c.euia || c.id,
+                        idNum: c.idnum || c.idNum || c.id || null,
+                        name: c.nome || c.name || c.nome,
+                        whatsapp: c.whatsapp || c.WhatsApp,
+                        rua: c.rua,
+                        rua_num: c.rua_num,
+                        bairro: c.bairro,
+                        cidade: c.cidade,
+                        referencia: c.referencia,
+                        purchases: []
+                    };
+                });
+            }
+
+            await loadHistoryIntoClients();
+
+        } catch (e) {
+            console.error('Erro ao buscar clientes do Supabase', e);
+        } finally {
+            renderClients();
+            renderProducts();
+            renderAllDatalists();
+            attachSuggestionListeners();
+            bindClientsList();
+            // bind pagination not needed because renderClientsPagination wires its own events
+        }
+    })();
 });
