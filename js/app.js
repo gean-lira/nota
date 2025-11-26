@@ -229,7 +229,7 @@ function renderClients(name = "", id = "") {
     const searchId = (id || "").trim();
 
     // filtra os clientes
-    let filtered = clients.filter(c => {
+    const filtered = clients.filter(c => {
         if (searchName && !String(c.name || "").toLowerCase().includes(searchName)) return false;
         if (searchId && String(c.idNum) !== searchId) return false;
         return true;
@@ -272,10 +272,10 @@ function renderClients(name = "", id = "") {
       </div>
 
       <div style="display:flex; gap:6px;">
-        <button class="ghost small-btn" data-a="edit" data-i="${clients.indexOf(c)}">Editar</button>
-        <button class="small-btn" data-a="select" data-i="${clients.indexOf(c)}">Selecionar</button>
-        <button class="ghost small-btn" data-a="history" data-i="${clients.indexOf(c)}">Histórico</button>
-        <button class="ghost small-btn" data-a="del" data-i="${clients.indexOf(c)}">Excluir</button>
+        <button class="ghost small-btn" data-a="edit" data-id="${escapeHtmlAttr(String(c.idNum))}">Editar</button>
+        <button class="small-btn" data-a="select" data-id="${escapeHtmlAttr(String(c.idNum))}">Selecionar</button>
+        <button class="ghost small-btn" data-a="history" data-id="${escapeHtmlAttr(String(c.idNum))}">Histórico</button>
+        <button class="ghost small-btn" data-a="del" data-id="${escapeHtmlAttr(String(c.idNum))}">Excluir</button>
       </div>
     `;
         box.appendChild(div);
@@ -299,10 +299,14 @@ function renderClients(name = "", id = "") {
 function clientsListClickHandler(e) {
     const b = e.target.closest("button"); if (!b) return;
     const a = b.dataset.a;
-    const i = Number(b.dataset.i);
-    const c = clients[i];
+    const dataId = b.dataset.id; // aqui usamos idNum, não índice
+    if (!dataId) return;
 
-    if (!c) return;
+    // localizar cliente pelo idNum (string/number compatível)
+    const cidx = clients.findIndex(c => String(c.idNum) === String(dataId) || String(c.idnum) === String(dataId) || String(c.id) === String(dataId));
+    if (cidx === -1) return alert("Cliente não encontrado");
+
+    const c = clients[cidx];
 
     if (a === "select") {
         selectedClientId = c.idNum;
@@ -313,7 +317,7 @@ function clientsListClickHandler(e) {
     }
 
     if (a === "edit") {
-        editingIndex = i;
+        editingIndex = cidx;
 
         if ($("client-area")) $("client-area").style.display = "none";
         if ($("product-area")) $("product-area").style.display = "none";
@@ -338,17 +342,17 @@ function clientsListClickHandler(e) {
     }
 
     if (a === "history") {
-        openHistory(i);
+        openHistory(cidx);
         return;
     }
 
     if (a === "del") {
         if (!confirm("Excluir cliente? (o histórico será removido do banco também)")) return;
 
-        const clientIdNum = c.idNum;   // 👈 ADIÇÃO: guardar o idnum do cliente
+        const clientIdNum = c.idNum;
 
         // remove da lista em memória e atualiza a tela
-        clients.splice(i, 1);
+        clients.splice(cidx, 1);
 
         // ajustar página atual se necessário
         const maxPages = Math.max(1, Math.ceil(clients.length / clientsPageSize) || 1);
@@ -356,7 +360,6 @@ function clientsListClickHandler(e) {
 
         renderClients(lastClientsSearchName, lastClientsSearchId);
 
-        // 👇 APAGA no Supabase
         if (window.supabase) {
             window.supabase
                 .from('historico')
@@ -658,10 +661,12 @@ function buildPrint(obj) {
 }
 
 /* salvar compra no histórico (Supabase + memória)
-   Versão com logs, aguarda o insert e atualiza memória quando possível.
+   Agora async: aguardamos resposta do Supabase e retornamos o objeto salvo (com id do banco quando existir).
+   Evitamos inserções duplicadas com printingLock/uid.
 */
 async function savePurchaseToClient(clientIdNum, purchaseData) {
     try {
+        // se já estiver imprimindo/salvando, não faz outra operação igual
         if (printingLock) {
             console.warn("Operação de salvar/imprimir já em andamento - bloqueando duplicata.");
             return null;
@@ -678,44 +683,54 @@ async function savePurchaseToClient(clientIdNum, purchaseData) {
             note: purchaseData.note || ""
         };
 
-        // tenta localizar cliente em memória (comparação flexível)
-        let idx = clients.findIndex(c => String(c.idNum) === String(clientIdNum) || String(c.idnum) === String(clientIdNum) || String(c.id) === String(clientIdNum));
-        if (idx === -1) {
-            console.warn("savePurchaseToClient: cliente não encontrado em memória para id:", clientIdNum, "clients:", clients.map(c=>c.idNum));
-        } else {
-            if (!Array.isArray(clients[idx].purchases)) clients[idx].purchases = [];
+        const idx = clients.findIndex(c => c.idNum === clientIdNum);
+        if (idx !== -1) {
+            if (!Array.isArray(clients[idx].purchases)) {
+                clients[idx].purchases = [];
+            }
             clients[idx].purchases.push(purchase);
         }
+
+        // UID temporário para ajudar a prevenir duplicatas (opcional se tabela aceitar)
+        const uid = `${clientIdNum}_${Date.now()}_${Math.floor(Math.random()*9999)}`;
 
         const payload = {
             cliente_indu: clientIdNum,
             produto: JSON.stringify(purchaseData.produtos || []),
             taxaentrega: purchaseData.fee || 0,
             total: purchaseData.total || 0,
-            obs: purchaseData.note || ""
-            // remova client_purchase_uid caso queira usar esse campo — por enquanto deixei sem ele
+            obs: purchaseData.note || "",
+            client_purchase_uid: uid // campo adicional (se sua tabela não aceitar, remova)
         };
 
-        console.log("Inserindo histórico (payload):", payload);
         try {
-            const res = await window.supabase.from('historico').insert([payload]).select();
+            const res = await window.supabase
+                .from('historico')
+                .insert([payload])
+                .select();
+
             if (res.error) {
-                console.error("Erro ao inserir histórico:", res.error);
+                // se o supabase retornar erro, logamos, mas não interrompemos a UX
+                console.error("Erro ao salvar histórico no Supabase:", res.error);
             } else if (Array.isArray(res.data) && res.data[0]) {
                 const row = res.data[0];
+                // atualiza o id do purchase na memória para facilitar futuras referências
                 purchase.id = row.id || purchase.id;
-                console.log("Histórico salvo no Supabase:", row);
-            } else {
-                console.log("Insert retornou sem erro e sem data (verifique).", res);
+                // atualiza a entrada no clients[idx].purchases (procura por date/total) e substitui id
+                if (idx !== -1 && Array.isArray(clients[idx].purchases)) {
+                    const pidx = clients[idx].purchases.findIndex(p => p.date === purchase.date && Number(p.total) === Number(purchase.total));
+                    if (pidx !== -1) clients[idx].purchases[pidx].id = purchase.id;
+                }
+                console.log("Histórico salvo com sucesso:", row);
             }
         } catch (err) {
-            console.error("Exceção ao inserir histórico no Supabase:", err);
+            console.error("Exceção ao salvar histórico (await):", err);
         }
 
         printingLock = false;
         return purchase;
-    } catch (e) {
-        console.error("Exceção savePurchaseToClient:", e);
+    } catch (err) {
+        console.error("Exceção ao salvar histórico:", err);
         printingLock = false;
         return null;
     }
@@ -734,68 +749,36 @@ async function loadHistoryIntoClients() {
             return;
         }
 
-        if (!Array.isArray(data) || data.length === 0) {
-            console.log("Nenhum registro de histórico retornado do Supabase.");
-            // limpa purchases para consistência
-            clients.forEach(c => { c.purchases = []; });
-            return;
-        }
+        if (!Array.isArray(data)) return;
 
-        // reset
         clients.forEach(c => { c.purchases = []; });
 
         data.forEach(row => {
-            // pega o campo que representa o cliente (adapta a vários nomes possíveis)
-            const clienteField = row.cliente_indu ?? row.cliente ?? row.client_id ?? null;
-            const rowClientIdStr = clienteField !== null && clienteField !== undefined ? String(clienteField).trim() : null;
-
-            if (!rowClientIdStr) {
-                console.warn("Linha de histórico sem cliente identificável:", row);
-                return;
-            }
-
-            // tenta encontrar o cliente por vários campos possíveis (comparação flexível)
-            const client = clients.find(c => {
-                const candidates = [
-                    c.idNum, c.idnum, c.id,
-                    (c.idNum !== undefined && c.idNum !== null) ? String(c.idNum) : null,
-                    (c.id !== undefined && c.id !== null) ? String(c.id) : null
-                ].filter(Boolean).map(x => String(x));
-                return candidates.includes(rowClientIdStr);
-            });
-
-            if (!client) {
-                console.warn("Não foi possível associar histórico ao cliente (cliente_indu):", rowClientIdStr, "Row:", row);
-                return;
-            }
+            const client = clients.find(c => String(c.idNum) === String(row.cliente_indu));
+            if (!client) return;
 
             if (!Array.isArray(client.purchases)) client.purchases = [];
 
-            // parse produto com segurança
             let produtos = [];
             if (row.produto) {
                 try {
                     produtos = JSON.parse(row.produto);
                 } catch (e) {
-                    console.error("Erro ao parsear produto do histórico (row.produto):", e, row.produto);
-                    produtos = [];
+                    console.error("Erro ao fazer parse de produto do histórico:", e, row.produto);
                 }
             }
 
             client.purchases.push({
                 id: row.id,
-                clientIdNum: row.cliente_indu ?? row.client_id ?? null,
-                date: formatDateTime(row.created_at) || String(row.created_at || row.date || ""),
+                clientIdNum: row.cliente_indu,
+                date: formatDateTime(row.created_at) || "",
                 produtos,
-                fee: row.taxaentrega ?? row.fee ?? 0,
-                total: row.total ?? 0,
-                note: row.obs ?? row.note ?? ""
+                fee: row.taxaentrega || 0,
+                total: row.total || 0,
+                note: row.obs || ""
             });
         });
 
-        const withPurchases = clients.filter(c => (c.purchases || []).length > 0)
-            .map(c => ({ idNum: c.idNum, name: c.name, purchases: c.purchases.length }));
-        console.log("Histórico carregado. Clientes com purchases:", withPurchases);
     } catch (e) {
         console.error("Exceção ao carregar histórico do Supabase:", e);
     }
@@ -868,7 +851,7 @@ $("printBtn") && ($("printBtn").onclick = async () => {
         // fallback cleanup
         cleanUpAfterPrint();
     }
-});
+}));
 
 /* HISTÓRICO: abrir modal */
 function openHistory(index) {
