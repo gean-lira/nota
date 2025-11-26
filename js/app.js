@@ -724,83 +724,102 @@ async function savePurchaseToClient(clientIdNum, purchaseData) {
 
 /* carrega histórico do Supabase e coloca em clients[i].purchases */
 async function loadHistoryIntoClients() {
-    try {
-        const { data, error } = await window.supabase
-            .from('historico')
-            .select('*')
-            .order('id', { ascending: true });
+  try {
+    const { data, error } = await window.supabase
+      .from('historico')
+      .select('*')
+      .order('id', { ascending: true });
 
-        if (error) {
-            console.error("Erro ao buscar histórico no Supabase:", error);
-            return;
-        }
-
-        if (!Array.isArray(data) || data.length === 0) {
-            console.log("Nenhum registro de histórico retornado do Supabase.");
-            // limpa purchases para consistência
-            clients.forEach(c => { c.purchases = []; });
-            return;
-        }
-
-        // reset
-        clients.forEach(c => { c.purchases = []; });
-
-        data.forEach(row => {
-            // pega o campo que representa o cliente (adapta a vários nomes possíveis)
-            const clienteField = row.cliente_indu ?? row.cliente ?? row.client_id ?? null;
-            const rowClientIdStr = clienteField !== null && clienteField !== undefined ? String(clienteField).trim() : null;
-
-            if (!rowClientIdStr) {
-                console.warn("Linha de histórico sem cliente identificável:", row);
-                return;
-            }
-
-            // tenta encontrar o cliente por vários campos possíveis (comparação flexível) - FIX
-            const client = clients.find(c => {
-                const candidates = [
-                    c.idNum, c.idnum, c.id,
-                    (c.idNum !== undefined && c.idNum !== null) ? String(c.idNum) : null,
-                    (c.id !== undefined && c.id !== null) ? String(c.id) : null
-                ].filter(Boolean).map(x => String(x).trim());
-                return candidates.includes(rowClientIdStr);
-            });
-
-            if (!client) {
-                console.warn("Não foi possível associar histórico ao cliente (cliente_indu):", rowClientIdStr, "Row:", row);
-                return;
-            }
-
-            if (!Array.isArray(client.purchases)) client.purchases = [];
-
-            // parse produto com segurança
-            let produtos = [];
-            if (row.produto) {
-                try {
-                    produtos = JSON.parse(row.produto);
-                } catch (e) {
-                    console.error("Erro ao parsear produto do histórico (row.produto):", e, row.produto);
-                    produtos = [];
-                }
-            }
-
-            client.purchases.push({
-                id: row.id,
-                clientIdNum: row.cliente_indu ?? row.client_id ?? null,
-                date: formatDateTime(row.created_at) || String(row.created_at || row.date || ""),
-                produtos,
-                fee: row.taxaentrega ?? row.fee ?? 0,
-                total: row.total ?? 0,
-                note: row.obs ?? row.note ?? ""
-            });
-        });
-
-        const withPurchases = clients.filter(c => (c.purchases || []).length > 0)
-            .map(c => ({ idNum: c.idNum, name: c.name, purchases: c.purchases.length }));
-        console.log("Histórico carregado. Clientes com purchases:", withPurchases);
-    } catch (e) {
-        console.error("Exceção ao carregar histórico do Supabase:", e);
+    if (error) {
+      console.error("Erro ao buscar histórico no Supabase:", error);
+      return;
     }
+
+    // limpa purchases antes
+    clients.forEach(c => { c.purchases = []; });
+
+    if (!Array.isArray(data) || data.length === 0) {
+      console.log("Nenhum registro de histórico retornado do Supabase.");
+      return;
+    }
+
+    const unmatched = [];
+
+    data.forEach(row => {
+      // pega valor cru do histórico (prioriza cliente_indu)
+      const rawCliente = row.cliente_indu ?? row.client_id ?? row.cliente ?? null;
+
+      // normalizações para comparação
+      const rowStr = rawCliente !== null && rawCliente !== undefined ? String(rawCliente).trim() : null;
+      const rowNum = (rawCliente !== null && rawCliente !== undefined && !isNaN(Number(rawCliente))) ? Number(rawCliente) : null;
+
+      if (rowStr === null) {
+        unmatched.push({ row, reason: 'cliente_indu ausente' });
+        return;
+      }
+
+      // busca cliente tolerante a tipos/formato
+      const clientIndex = clients.findIndex(c => {
+        const candRaw = c.idNum ?? c.idnum ?? c.id ?? "";
+        const candStr = candRaw !== null && candRaw !== undefined ? String(candRaw).trim() : "";
+        const candNum = (!isNaN(Number(candRaw)) && candStr !== "") ? Number(candRaw) : null;
+
+        // 1) exact string
+        if (candStr && rowStr === candStr) return true;
+        // 2) exact numeric
+        if (rowNum !== null && candNum !== null && rowNum === candNum) return true;
+        // 3) fuzzy contains (prefix/suffix issues)
+        if (candStr && candStr.includes(rowStr)) return true;
+        if (rowStr && rowStr.includes(candStr) && candStr !== "") return true;
+        // 4) compare digits only (remove formatação)
+        const digitsRow = rowStr.replace(/\D+/g, '');
+        const digitsCand = candStr.replace(/\D+/g, '');
+        if (digitsRow && digitsCand && digitsRow === digitsCand) return true;
+
+        return false;
+      });
+
+      if (clientIndex === -1) {
+        unmatched.push({ row, reason: 'não encontrou cliente correspondente' });
+        return;
+      }
+
+      const client = clients[clientIndex];
+      if (!Array.isArray(client.purchases)) client.purchases = [];
+
+      // parse produto com segurança
+      let produtos = [];
+      if (row.produto) {
+        try { produtos = JSON.parse(row.produto); } catch (e) { produtos = []; }
+      }
+
+      client.purchases.push({
+        id: row.id,
+        clientIdNum: rawCliente,
+        date: formatDateTime(row.created_at) || String(row.created_at || row.date || ""),
+        produtos,
+        fee: row.taxaentrega ?? row.fee ?? 0,
+        total: row.total ?? 0,
+        note: row.obs ?? row.note ?? ""
+      });
+    });
+
+    const withPurchases = clients.filter(c => (c.purchases || []).length > 0)
+      .map(c => ({ idNum: c.idNum, name: c.name, purchases: c.purchases.length }));
+
+    console.log("Histórico carregado. Clientes com purchases:", withPurchases);
+
+    if (unmatched.length) {
+      console.warn("Registros não associados (exemplo):", unmatched.slice(0, 20));
+    } else {
+      console.log("Todas as linhas foram associadas.");
+    }
+
+  } catch (e) {
+    console.error("Exceção ao carregar histórico do Supabase:", e);
+  }
 }
+
 
 /* botão imprimir / registrar compra */
 $("printBtn").onclick = async () => {
