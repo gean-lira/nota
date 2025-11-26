@@ -235,6 +235,13 @@ function renderClients(name = "", id = "") {
         return true;
     });
 
+    // ordenar do maior para o menor pelo idNum (numérico, fallback 0)
+filtered.sort((a, b) => {
+    const na = Number(a.idNum) || 0;
+    const nb = Number(b.idNum) || 0;
+    return nb - na; // nb - na => decrescente
+});
+
     // DEBUG opcional
     console.log('renderClients -> filtered:', filtered.length, 'pageSize:', clientsPageSize, 'currentPage:', currentClientsPage);
 
