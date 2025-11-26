@@ -661,12 +661,10 @@ function buildPrint(obj) {
    Versão com logs, aguarda o insert e atualiza memória quando possível.
 */
 async function savePurchaseToClient(clientIdNum, purchaseData) {
-    if (printingLock) {
-        console.log("savePurchaseToClient: operação já em andamento — ignorando duplicata.");
-        return null;
-    }
 
-    
+    // Agora NÃO bloqueia o salvamento — trava só durante a operação
+    printingLock = true;
+
     try {
         const purchase = {
             id: Date.now(),
@@ -678,6 +676,7 @@ async function savePurchaseToClient(clientIdNum, purchaseData) {
             note: purchaseData.note || ""
         };
 
+        // encontra o cliente em memória
         const idx = clients.findIndex(c =>
             String(c.idNum) === String(clientIdNum) ||
             String(c.idnum || "") === String(clientIdNum) ||
@@ -685,7 +684,8 @@ async function savePurchaseToClient(clientIdNum, purchaseData) {
         );
 
         if (idx !== -1) {
-            if (!Array.isArray(clients[idx].purchases)) clients[idx].purchases = [];
+            if (!Array.isArray(clients[idx].purchases))
+                clients[idx].purchases = [];
             clients[idx].purchases.push(purchase);
         }
 
@@ -706,10 +706,12 @@ async function savePurchaseToClient(clientIdNum, purchaseData) {
             console.error("Erro ao inserir histórico:", res.error);
         }
 
+        // Atualiza o ID salvo no Supabase
         const row = res?.data?.[0];
         if (row && idx !== -1) {
             const pidx = clients[idx].purchases.findIndex(p => p.id === purchase.id);
-            if (pidx !== -1) clients[idx].purchases[pidx].id = row.id;
+            if (pidx !== -1)
+                clients[idx].purchases[pidx].id = row.id;
         }
 
         return row ? { ...purchase, id: row.id } : purchase;
@@ -718,10 +720,9 @@ async function savePurchaseToClient(clientIdNum, purchaseData) {
         console.error("savePurchaseToClient error:", err);
         return null;
     } finally {
-        printingLock = false;
+        printingLock = false; // destrava sempre
     }
 }
-
 
 /* carrega histórico do Supabase e coloca em clients[i].purchases */
 async function loadHistoryIntoClients() {
