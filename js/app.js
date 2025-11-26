@@ -661,65 +661,67 @@ function buildPrint(obj) {
    Versão com logs, aguarda o insert e atualiza memória quando possível.
 */
 async function savePurchaseToClient(clientIdNum, purchaseData) {
-    try {
-        if (printingLock) {
-            console.warn("Operação de salvar/imprimir já em andamento - bloqueando duplicata.");
-            return null;
-        }
-        printingLock = true;
+    if (printingLock) {
+        console.log("savePurchaseToClient: operação já em andamento — ignorando duplicata.");
+        return null;
+    }
 
+    printingLock = true;
+    try {
         const purchase = {
             id: Date.now(),
             clientIdNum,
-            date: purchaseData.date,
-            produtos: purchaseData.produtos || [],
-            fee: purchaseData.fee || 0,
-            total: purchaseData.total || 0,
+            date: purchaseData.date || now(),
+            produtos: Array.isArray(purchaseData.produtos) ? purchaseData.produtos : [],
+            fee: Number(purchaseData.fee || 0),
+            total: Number(purchaseData.total || 0),
             note: purchaseData.note || ""
         };
 
-        // tenta localizar cliente em memória (comparação flexível)
-        let idx = clients.findIndex(c => String(c.idNum) === String(clientIdNum) || String(c.idnum) === String(clientIdNum) || String(c.id) === String(clientIdNum));
-        if (idx === -1) {
-            console.warn("savePurchaseToClient: cliente não encontrado em memória para id:", clientIdNum, "clients:", clients.map(c=>c.idNum));
-        } else {
+        const idx = clients.findIndex(c =>
+            String(c.idNum) === String(clientIdNum) ||
+            String(c.idnum || "") === String(clientIdNum) ||
+            String(c.id || "") === String(clientIdNum)
+        );
+
+        if (idx !== -1) {
             if (!Array.isArray(clients[idx].purchases)) clients[idx].purchases = [];
             clients[idx].purchases.push(purchase);
         }
 
         const payload = {
             cliente_indu: clientIdNum,
-            produto: JSON.stringify(purchaseData.produtos || []),
-            taxaentrega: purchaseData.fee || 0,
-            total: purchaseData.total || 0,
-            obs: purchaseData.note || ""
-            // remova client_purchase_uid caso queira usar esse campo — por enquanto deixei sem ele
+            produto: JSON.stringify(purchase.produtos),
+            taxaentrega: purchase.fee,
+            total: purchase.total,
+            obs: purchase.note
         };
 
-        console.log("Inserindo histórico (payload):", payload);
-        try {
-            const res = await window.supabase.from('historico').insert([payload]).select();
-            if (res.error) {
-                console.error("Erro ao inserir histórico:", res.error);
-            } else if (Array.isArray(res.data) && res.data[0]) {
-                const row = res.data[0];
-                purchase.id = row.id || purchase.id;
-                console.log("Histórico salvo no Supabase:", row);
-            } else {
-                console.log("Insert retornou sem erro e sem data (verifique).", res);
-            }
-        } catch (err) {
-            console.error("Exceção ao inserir histórico no Supabase:", err);
+        const res = await window.supabase
+            .from('historico')
+            .insert([payload])
+            .select();
+
+        if (res?.error) {
+            console.error("Erro ao inserir histórico:", res.error);
         }
 
-        printingLock = false;
-        return purchase;
-    } catch (e) {
-        console.error("Exceção savePurchaseToClient:", e);
-        printingLock = false;
+        const row = res?.data?.[0];
+        if (row && idx !== -1) {
+            const pidx = clients[idx].purchases.findIndex(p => p.id === purchase.id);
+            if (pidx !== -1) clients[idx].purchases[pidx].id = row.id;
+        }
+
+        return row ? { ...purchase, id: row.id } : purchase;
+
+    } catch (err) {
+        console.error("savePurchaseToClient error:", err);
         return null;
+    } finally {
+        printingLock = false;
     }
 }
+
 
 /* carrega histórico do Supabase e coloca em clients[i].purchases */
 async function loadHistoryIntoClients() {
