@@ -14,6 +14,9 @@ let lastClientsSearchId = "";
 let currentHistoryPage = 1;
 const historyPageSize = 10; // máximo 10 items por página
 
+// printing lock to avoid duplicate prints/inserts
+let printingLock = false;
+
 // SUGGESTIONS: storage key and helpers
 const S_KEY = "nota_entrega_suggestions_v1";
 const S_MAX = 50; // max items per field
@@ -346,7 +349,7 @@ function clientsListClickHandler(e) {
 
         renderClients(lastClientsSearchName, lastClientsSearchId);
 
-        // 👇 ADIÇÃO: apagar no Supabase em background
+        // 👇 APAGA no Supabase
         if (window.supabase) {
             window.supabase
                 .from('historico')
@@ -647,9 +650,19 @@ function buildPrint(obj) {
   `;
 }
 
-/* salvar compra no histórico (Supabase + memória) */
-function savePurchaseToClient(clientIdNum, purchaseData) {
+/* salvar compra no histórico (Supabase + memória)
+   Agora async: aguardamos resposta do Supabase e retornamos o objeto salvo (com id do banco quando existir).
+   Evitamos inserções duplicadas com printingLock/uid.
+*/
+async function savePurchaseToClient(clientIdNum, purchaseData) {
     try {
+        // se já estiver imprimindo/salvando, não faz outra operação igual
+        if (printingLock) {
+            console.warn("Operação de salvar/imprimir já em andamento - bloqueando duplicata.");
+            return null;
+        }
+        printingLock = true;
+
         const purchase = {
             id: Date.now(),
             clientIdNum,
@@ -668,37 +681,47 @@ function savePurchaseToClient(clientIdNum, purchaseData) {
             clients[idx].purchases.push(purchase);
         }
 
+        // UID temporário para ajudar a prevenir duplicatas (opcional se tabela aceitar)
+        const uid = `${clientIdNum}_${Date.now()}_${Math.floor(Math.random()*9999)}`;
+
         const payload = {
             cliente_indu: clientIdNum,
             produto: JSON.stringify(purchaseData.produtos || []),
             taxaentrega: purchaseData.fee || 0,
             total: purchaseData.total || 0,
-            obs: purchaseData.note || ""
+            obs: purchaseData.note || "",
+            client_purchase_uid: uid // campo adicional (se sua tabela não aceitar, remova)
         };
 
-        window.supabase
-            .from('historico')
-            .insert([payload])
-            .select()
-            .then(({ data, error }) => {
-                if (error) {
-                    const msg = String(error.message || "");
-                    if (msg.includes("Failed to execute 'print' on 'Window'")) {
-                        console.warn("Aviso: erro de print capturado no resultado do Supabase (ignorado):", error);
-                    } else {
-                        console.error("Erro ao salvar histórico no Supabase:", error);
-                    }
-                } else {
-                    console.log("Histórico salvo com sucesso:", data);
-                }
-            })
-            .catch(err => {
-                console.error("Exceção ao salvar histórico (Promise):", err);
-            });
+        try {
+            const res = await window.supabase
+                .from('historico')
+                .insert([payload])
+                .select();
 
+            if (res.error) {
+                // se o supabase retornar erro, logamos, mas não interrompemos a UX
+                console.error("Erro ao salvar histórico no Supabase:", res.error);
+            } else if (Array.isArray(res.data) && res.data[0]) {
+                const row = res.data[0];
+                // atualiza o id do purchase na memória para facilitar futuras referências
+                purchase.id = row.id || purchase.id;
+                // atualiza a entrada no clients[idx].purchases (procura por date/total) e substitui id
+                if (idx !== -1 && Array.isArray(clients[idx].purchases)) {
+                    const pidx = clients[idx].purchases.findIndex(p => p.date === purchase.date && Number(p.total) === Number(purchase.total));
+                    if (pidx !== -1) clients[idx].purchases[pidx].id = purchase.id;
+                }
+                console.log("Histórico salvo com sucesso:", row);
+            }
+        } catch (err) {
+            console.error("Exceção ao salvar histórico (await):", err);
+        }
+
+        printingLock = false;
         return purchase;
     } catch (err) {
         console.error("Exceção ao salvar histórico:", err);
+        printingLock = false;
         return null;
     }
 }
@@ -752,7 +775,11 @@ async function loadHistoryIntoClients() {
 }
 
 /* botão imprimir / registrar compra */
-$("printBtn") && ($("printBtn").onclick = () => {
+$("printBtn") && ($("printBtn").onclick = async () => {
+
+    if (printingLock) {
+        return alert("Operação em andamento. Aguarde alguns segundos antes de tentar novamente.");
+    }
 
     const client = clients.find(c => c.idNum === selectedClientId);
     if (!client) return alert("Selecione um cliente");
@@ -766,7 +793,10 @@ $("printBtn") && ($("printBtn").onclick = () => {
     if ($("fee").value) addSuggestion("fee", $("fee").value);
     if ($("note").value) addSuggestion("note", $("note").value);
 
-    const saved = savePurchaseToClient(client.idNum, {
+    // trava para evitar duplicate inserts/prints
+    printingLock = true;
+
+    const saved = await savePurchaseToClient(client.idNum, {
         produtos: products,
         fee,
         total,
@@ -774,7 +804,11 @@ $("printBtn") && ($("printBtn").onclick = () => {
         date: now()
     });
 
-    $("print-area").innerHTML = buildPrint({
+    // monta a área de impressão (limpa antes)
+    const pa = $("print-area");
+    if (pa) pa.innerHTML = "";
+
+    pa.innerHTML = buildPrint({
         date: now(),
         produtos: products,
         fee,
@@ -784,17 +818,29 @@ $("printBtn") && ($("printBtn").onclick = () => {
         venda: saved ? saved.id : ""
     });
 
+    // use onafterprint para garantir limpeza após impressão
+    const cleanUpAfterPrint = () => {
+        try {
+            if (pa) pa.innerHTML = "";
+            showInitialScreen();
+
+            products = [];
+            renderProducts();
+        } finally {
+            printingLock = false;
+            window.removeEventListener('afterprint', cleanUpAfterPrint);
+        }
+    };
+
+    window.addEventListener('afterprint', cleanUpAfterPrint);
+
     try {
         window.print();
     } catch (err) {
         console.error("Erro ao chamar window.print:", err);
+        // fallback cleanup
+        cleanUpAfterPrint();
     }
-
-    $("print-area").innerHTML = "";
-    showInitialScreen();
-
-    products = [];
-    renderProducts();
 });
 
 /* HISTÓRICO: abrir modal */
@@ -874,11 +920,21 @@ $("historyContent") && ($("historyContent").onclick = function (e) {
 
 
     if (action === "view") {
+        // se já estiver imprimindo, bloqueia nova impressão
+        if (printingLock) {
+            return alert("Operação em andamento. Aguarde.");
+        }
+
         const entry = (clients[cidx].purchases || []).find(x => x.id === pid);
         if (!entry) return alert("Registro não encontrado");
 
         const fakeClient = clients[cidx];
-        $("print-area").innerHTML = buildPrint({
+
+        // limpa e monta print-area explicitamente para evitar multiplicação
+        const pa = $("print-area");
+        if (pa) pa.innerHTML = "";
+
+        pa.innerHTML = buildPrint({
             date: entry.date,
             produtos: entry.produtos || [],
             fee: entry.fee || 0,
@@ -888,31 +944,30 @@ $("historyContent") && ($("historyContent").onclick = function (e) {
             venda: entry.id
         });
 
-        requestAnimationFrame(() => {
+        // trava para evitar duplicação
+        printingLock = true;
+
+        const afterPrintCleanup = () => {
+            try {
+                if (pa) pa.innerHTML = "";
+                // volta tela inicial (mantém cliente desmarcado)
+                selectedClientId = null;
+                if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
+                showInitialScreen();
+            } finally {
+                printingLock = false;
+                window.removeEventListener('afterprint', afterPrintCleanup);
+            }
+        };
+
+        window.addEventListener('afterprint', afterPrintCleanup);
+
+        try {
             window.print();
-            setTimeout(() => {
-                $("print-area").innerHTML = "";
-
-                const backBtn = document.createElement("button");
-                backBtn.textContent = "Voltar ao início";
-                backBtn.className = "small-btn";
-                backBtn.style.marginTop = "14px";
-                backBtn.style.position = "fixed";
-                backBtn.style.bottom = "20px";
-                backBtn.style.right = "20px";
-                backBtn.style.zIndex = "99999";
-
-                backBtn.onclick = () => {
-                    selectedClientId = null;
-                    if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
-                    showInitialScreen();
-                    backBtn.remove();
-                };
-
-                document.body.appendChild(backBtn);
-
-            }, 700);
-        });
+        } catch (err) {
+            console.error("Erro ao imprimir histórico:", err);
+            afterPrintCleanup();
+        }
 
         return;
     }
