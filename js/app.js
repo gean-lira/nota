@@ -236,11 +236,11 @@ function renderClients(name = "", id = "") {
     });
 
     // ordenar do maior para o menor pelo idNum (numérico, fallback 0)
-filtered.sort((a, b) => {
-    const na = Number(a.idNum) || 0;
-    const nb = Number(b.idNum) || 0;
-    return nb - na; // nb - na => decrescente
-});
+    filtered.sort((a, b) => {
+        const na = Number(a.idNum) || 0;
+        const nb = Number(b.idNum) || 0;
+        return nb - na; // nb - na => decrescente
+    });
 
     // DEBUG opcional
     console.log('renderClients -> filtered:', filtered.length, 'pageSize:', clientsPageSize, 'currentPage:', currentClientsPage);
@@ -272,10 +272,10 @@ filtered.sort((a, b) => {
       </div>
 
       <div style="display:flex; gap:6px;">
-        <button class="ghost small-btn" data-a="edit" data-i="${clients.indexOf(c)}">Editar</button>
-        <button class="small-btn" data-a="select" data-i="${clients.indexOf(c)}">Selecionar</button>
-        <button class="ghost small-btn" data-a="history" data-i="${clients.indexOf(c)}">Histórico</button>
-        <button class="ghost small-btn" data-a="del" data-i="${clients.indexOf(c)}">Excluir</button>
+        <button class="ghost small-btn" data-a="edit" data-id="${escapeHtmlAttr(String(c.idNum))}">Editar</button>
+        <button class="small-btn" data-a="select" data-id="${escapeHtmlAttr(String(c.idNum))}">Selecionar</button>
+        <button class="ghost small-btn" data-a="history" data-id="${escapeHtmlAttr(String(c.idNum))}">Histórico</button>
+        <button class="ghost small-btn" data-a="del" data-id="${escapeHtmlAttr(String(c.idNum))}">Excluir</button>
       </div>
     `;
         box.appendChild(div);
@@ -299,10 +299,14 @@ filtered.sort((a, b) => {
 function clientsListClickHandler(e) {
     const b = e.target.closest("button"); if (!b) return;
     const a = b.dataset.a;
-    const i = Number(b.dataset.i);
-    const c = clients[i];
+    const dataId = b.dataset.id; // aqui usamos idNum, não índice
+    if (!dataId) return;
 
-    if (!c) return;
+    // localizar cliente pelo idNum (string/number compatível)
+    const cidx = clients.findIndex(c => String(c.idNum) === String(dataId) || String(c.idnum) === String(dataId) || String(c.id) === String(dataId));
+    if (cidx === -1) return alert("Cliente não encontrado");
+
+    const c = clients[cidx];
 
     if (a === "select") {
         selectedClientId = c.idNum;
@@ -313,7 +317,7 @@ function clientsListClickHandler(e) {
     }
 
     if (a === "edit") {
-        editingIndex = i;
+        editingIndex = cidx;
 
         if ($("client-area")) $("client-area").style.display = "none";
         if ($("product-area")) $("product-area").style.display = "none";
@@ -338,17 +342,17 @@ function clientsListClickHandler(e) {
     }
 
     if (a === "history") {
-        openHistory(i);
+        openHistory(cidx);
         return;
     }
 
     if (a === "del") {
         if (!confirm("Excluir cliente? (o histórico será removido do banco também)")) return;
 
-        const clientIdNum = c.idNum;   // 👈 ADIÇÃO: guardar o idnum do cliente
+        const clientIdNum = c.idNum;
 
         // remove da lista em memória e atualiza a tela
-        clients.splice(i, 1);
+        clients.splice(cidx, 1);
 
         // ajustar página atual se necessário
         const maxPages = Math.max(1, Math.ceil(clients.length / clientsPageSize) || 1);
@@ -356,7 +360,6 @@ function clientsListClickHandler(e) {
 
         renderClients(lastClientsSearchName, lastClientsSearchId);
 
-        // 👇 APAGA no Supabase
         if (window.supabase) {
             window.supabase
                 .from('historico')
@@ -848,7 +851,7 @@ $("printBtn") && ($("printBtn").onclick = async () => {
         // fallback cleanup
         cleanUpAfterPrint();
     }
-});
+}));
 
 /* HISTÓRICO: abrir modal */
 function openHistory(index) {
