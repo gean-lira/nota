@@ -805,11 +805,9 @@ async function loadHistoryIntoClients() {
 }
 
 /* botão imprimir / registrar compra */
-$("printBtn") && ($("printBtn").onclick = async () => {
+$("printBtn").onclick = async () => {
 
-    if (printingLock) {
-        return alert("Operação em andamento. Aguarde alguns segundos antes de tentar novamente.");
-    }
+    // NÃO usa printingLock aqui — só dentro do savePurchaseToClient
 
     const client = clients.find(c => c.idNum === selectedClientId);
     if (!client) return alert("Selecione um cliente");
@@ -823,9 +821,7 @@ $("printBtn") && ($("printBtn").onclick = async () => {
     if ($("fee").value) addSuggestion("fee", $("fee").value);
     if ($("note").value) addSuggestion("note", $("note").value);
 
-    // trava para evitar duplicate inserts/prints
-    printingLock = true;
-
+    // 🔥 Agora apenas salva, SEM travar aqui
     const saved = await savePurchaseToClient(client.idNum, {
         produtos: products,
         fee,
@@ -834,7 +830,7 @@ $("printBtn") && ($("printBtn").onclick = async () => {
         date: now()
     });
 
-    // monta a área de impressão (limpa antes)
+    // monta a área de impressão
     const pa = $("print-area");
     if (pa) pa.innerHTML = "";
 
@@ -848,30 +844,28 @@ $("printBtn") && ($("printBtn").onclick = async () => {
         venda: saved ? saved.id : ""
     });
 
-    // use onafterprint para garantir limpeza após impressão
+    // limpeza pós impressão
     const cleanUpAfterPrint = () => {
         try {
             if (pa) pa.innerHTML = "";
             showInitialScreen();
-
             products = [];
             renderProducts();
         } finally {
-            printingLock = false;
-            window.removeEventListener('afterprint', cleanUpAfterPrint);
+            window.removeEventListener("afterprint", cleanUpAfterPrint);
         }
     };
 
-    window.addEventListener('afterprint', cleanUpAfterPrint);
+    window.addEventListener("afterprint", cleanUpAfterPrint);
 
     try {
         window.print();
     } catch (err) {
         console.error("Erro ao chamar window.print:", err);
-        // fallback cleanup
         cleanUpAfterPrint();
     }
-});
+};
+
 
 /* HISTÓRICO: abrir modal */
 function openHistory(index) {
