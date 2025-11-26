@@ -305,7 +305,8 @@ function clientsListClickHandler(e) {
     if (!c) return;
 
     if (a === "select") {
-        selectedClientId = c.idNum;
+    selectedClientId = String(c.idNum);  // força string pra não perder referência
+
         if ($("selectedLabel")) $("selectedLabel").innerText = c.name;
         if ($("client-area")) $("client-area").style.display = "none";
         if ($("product-area")) $("product-area").style.display = "block";
@@ -809,8 +810,15 @@ $("printBtn").onclick = async () => {
 
     // NÃO usa printingLock aqui — só dentro do savePurchaseToClient
 
-    const client = clients.find(c => c.idNum === selectedClientId);
-    if (!client) return alert("Selecione um cliente");
+   const client = clients.find(c =>
+    String(c.idNum) === String(selectedClientId)
+);
+
+if (!client) {
+    alert("Selecione um cliente antes de registrar a venda.");
+    return;
+}
+
 
     const soma = products.reduce((s, p) => s + (Number(p.price) || 0), 0);
     let fee = parseFloat(String($("fee").value || "0").replace(",", "."));
