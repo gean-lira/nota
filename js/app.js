@@ -154,7 +154,7 @@ ensurePurchasesField();
 // ---------- REMOVIDO: cliente exemplo no localStorage ----------
 
 function newId() {
-    const ids = clients.map(c => c.idNum).sort((a, b) => a - b);
+    const ids = clients.map(c => Number(c.idNum)).filter(n => !isNaN(n)).sort((a, b) => a - b);
     let i = 1; for (const n of ids) { if (n === i) i++; }
     return i;
 }
@@ -167,9 +167,7 @@ function showInitialScreen() {
     if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
 }
 
-/* ========== PAGINAÇÃO: função que renderiza a barra de paginação ==========
-   (cole ou deixe esta função em qualquer lugar fora da renderClients)
-*/
+/* ========== PAGINAÇÃO: função que renderiza a barra de paginação ========== */
 function renderClientsPagination(totalPages) {
     const pag = $("clientsPagination");
     if (!pag) return;
@@ -263,7 +261,7 @@ function renderClients(name = "", id = "") {
         div.className = "client-card";
         div.innerHTML = `
       <div class="client-info">
-        <div class="client-id">${c.idNum}</div>
+        <div class="client-id">${escapeHtml(c.idNum)}</div>
         <div>
           <b>${escapeHtml(c.name)}</b><br>
           <span class="muted">${escapeHtml(c.whatsapp || "")}</span><br>
@@ -305,8 +303,7 @@ function clientsListClickHandler(e) {
     if (!c) return;
 
     if (a === "select") {
-    selectedClientId = String(c.idNum);  // força string pra não perder referência
-
+        selectedClientId = String(c.idNum);  // força string pra não perder referência - FIX
         if ($("selectedLabel")) $("selectedLabel").innerText = c.name;
         if ($("client-area")) $("client-area").style.display = "none";
         if ($("product-area")) $("product-area").style.display = "block";
@@ -346,7 +343,7 @@ function clientsListClickHandler(e) {
     if (a === "del") {
         if (!confirm("Excluir cliente? (o histórico será removido do banco também)")) return;
 
-        const clientIdNum = c.idNum;   // 👈 ADIÇÃO: guardar o idnum do cliente
+        const clientIdNum = c.idNum;   // 👈 ADIÇÃO: guardar o idnum do cliente (STRING) - FIX
 
         // remove da lista em memória e atualiza a tela
         clients.splice(i, 1);
@@ -362,7 +359,7 @@ function clientsListClickHandler(e) {
             window.supabase
                 .from('historico')
                 .delete()
-                .eq('cliente_indu', clientIdNum)
+                .eq('cliente_indu', clientIdNum) // passing string - works for text columns; if your column is integer, DB will cast
                 .then(({ error }) => {
                     if (error) {
                         console.error("Erro ao apagar histórico do cliente no Supabase:", error);
@@ -451,7 +448,7 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
         const { error } = await window.supabase
             .from('clientes')
             .update({
-                idnum: updated.idNum,
+                idnum: Number(updated.idNum) || updated.idNum,
                 nome: updated.name,
                 whatsapp: updated.whatsapp,
                 telefone: updated.phone,
@@ -461,7 +458,7 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
                 cidade: updated.cidade,
                 referencia: updated.referencia
             })
-            .eq('idnum', updated.idNum);
+            .eq('idnum', Number(updated.idNum) || updated.idNum);
 
         if (error) {
             console.error("Erro ao atualizar cliente no Supabase:", error);
@@ -476,13 +473,13 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
     }
 
     // NOVO CLIENTE
-    obj.idNum = newId();
+    obj.idNum = String(newId()); // store as string internally - FIX
     obj.purchases = [];
 
     const { data, error } = await window.supabase
         .from('clientes')
         .insert([{
-            idnum: obj.idNum,
+            idnum: Number(obj.idNum), // store numeric in DB
             nome: obj.name,
             whatsapp: obj.whatsapp,
             telefone: obj.phone,
@@ -508,7 +505,7 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
     if (row) {
         clients.push({
             ...obj,
-            idNum: row.idnum ?? obj.idNum
+            idNum: String(row.idnum ?? obj.idNum) // ensure string - FIX
         });
     } else {
         clients.push(obj);
@@ -677,11 +674,11 @@ async function savePurchaseToClient(clientIdNum, purchaseData) {
             note: purchaseData.note || ""
         };
 
-        // encontra o cliente em memória
+        // encontra o cliente em memória (normalize compare) - FIX
         const idx = clients.findIndex(c =>
-            String(c.idNum) === String(clientIdNum) ||
-            String(c.idnum || "") === String(clientIdNum) ||
-            String(c.id || "") === String(clientIdNum)
+            String(c.idNum).trim() === String(clientIdNum).trim() ||
+            String(c.idnum || "").trim() === String(clientIdNum).trim() ||
+            String(c.id || "").trim() === String(clientIdNum).trim()
         );
 
         if (idx !== -1) {
@@ -691,7 +688,7 @@ async function savePurchaseToClient(clientIdNum, purchaseData) {
         }
 
         const payload = {
-            cliente_indu: clientIdNum,
+            cliente_indu: clientIdNum, // preserve original type passed (DB may be int or text)
             produto: JSON.stringify(purchase.produtos),
             taxaentrega: purchase.fee,
             total: purchase.total,
@@ -758,13 +755,13 @@ async function loadHistoryIntoClients() {
                 return;
             }
 
-            // tenta encontrar o cliente por vários campos possíveis (comparação flexível)
+            // tenta encontrar o cliente por vários campos possíveis (comparação flexível) - FIX
             const client = clients.find(c => {
                 const candidates = [
                     c.idNum, c.idnum, c.id,
                     (c.idNum !== undefined && c.idNum !== null) ? String(c.idNum) : null,
                     (c.id !== undefined && c.id !== null) ? String(c.id) : null
-                ].filter(Boolean).map(x => String(x));
+                ].filter(Boolean).map(x => String(x).trim());
                 return candidates.includes(rowClientIdStr);
             });
 
@@ -810,14 +807,14 @@ $("printBtn").onclick = async () => {
 
     // NÃO usa printingLock aqui — só dentro do savePurchaseToClient
 
-   const client = clients.find(c =>
-    String(c.idNum) === String(selectedClientId)
-);
+    const client = clients.find(c =>
+        String(c.idNum) === String(selectedClientId)
+    );
 
-if (!client) {
-    alert("Selecione um cliente antes de registrar a venda.");
-    return;
-}
+    if (!client) {
+        alert("Selecione um cliente antes de registrar a venda.");
+        return;
+    }
 
 
     const soma = products.reduce((s, p) => s + (Number(p.price) || 0), 0);
@@ -918,10 +915,10 @@ function openHistory(index) {
 $("historyContent") && ($("historyContent").onclick = function (e) {
     const b = e.target.closest("button"); if (!b) return;
     const action = b.dataset.action;
-    const clientId = Number(b.dataset.client);
+    const clientId = String(b.dataset.client);
     const pid = Number(b.dataset.pid);
 
-    const cidx = clients.findIndex(c => c.idNum === clientId);
+    const cidx = clients.findIndex(c => String(c.idNum) === String(clientId));
     if (cidx === -1) return alert("Cliente não encontrado");
 
     if (action === "del") {
@@ -1032,9 +1029,11 @@ domReady(() => {
 
             if (!error && Array.isArray(data)) {
                 clients = data.map(c => {
+                    // normalize idNum to STRING to avoid type mismatch when matching with historico.cliente_indu - FIX
+                    const rawIdNum = c.idnum ?? c.idNum ?? c.id ?? "";
                     return {
                         id: c.id || c.euia || c.id,
-                        idNum: c.idnum || c.idNum || c.id || null,
+                        idNum: rawIdNum !== null && rawIdNum !== undefined ? String(rawIdNum).trim() : "",
                         name: c.nome || c.name || c.nome,
                         whatsapp: c.whatsapp || c.WhatsApp,
                         rua: c.rua,
