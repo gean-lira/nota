@@ -666,7 +666,7 @@ async function savePurchaseToClient(clientIdNum, purchaseData) {
         return null;
     }
 
-    printingLock = true;
+    
     try {
         const purchase = {
             id: Date.now(),
