@@ -270,10 +270,10 @@ function renderClients(name = "", id = "") {
       </div>
 
       <div style="display:flex; gap:6px;">
-        <button class="ghost small-btn" data-a="edit" data-i="${clients.indexOf(c)}">Editar</button>
-        <button class="small-btn" data-a="select" data-i="${clients.indexOf(c)}">Selecionar</button>
-        <button class="ghost small-btn" data-a="history" data-i="${clients.indexOf(c)}">Histórico</button>
-        <button class="ghost small-btn" data-a="del" data-i="${clients.indexOf(c)}">Excluir</button>
+        <button class="ghost small-btn" data-a="edit" data-id="${escapeHtmlAttr(String(c.idNum))}">Editar</button>
+        <button class="small-btn" data-a="select" data-id="${escapeHtmlAttr(String(c.idNum))}">Selecionar</button>
+        <button class="ghost small-btn" data-a="history" data-id="${escapeHtmlAttr(String(c.idNum))}">Histórico</button>
+        <button class="ghost small-btn" data-a="del" data-id="${escapeHtmlAttr(String(c.idNum))}">Excluir</button>
       </div>
     `;
         box.appendChild(div);
@@ -297,13 +297,16 @@ function renderClients(name = "", id = "") {
 function clientsListClickHandler(e) {
     const b = e.target.closest("button"); if (!b) return;
     const a = b.dataset.a;
-    const i = Number(b.dataset.i);
+    const idAttr = b.dataset.id;
+    const iAttr = b.dataset.i;
+    const i = (typeof idAttr !== 'undefined') ? clients.findIndex(c => String(c.idNum).trim() === String(idAttr).trim()) : Number(iAttr);
     const c = clients[i];
 
     if (!c) return;
 
     if (a === "select") {
-        selectedClientId = String(c.idNum);  // força string pra não perder referência - FIX
+        selectedClientId = String(c.idNum);  // força string pra não perder referência
+
         if ($("selectedLabel")) $("selectedLabel").innerText = c.name;
         if ($("client-area")) $("client-area").style.display = "none";
         if ($("product-area")) $("product-area").style.display = "block";
@@ -359,7 +362,7 @@ function clientsListClickHandler(e) {
             window.supabase
                 .from('historico')
                 .delete()
-                .eq('cliente_indu', clientIdNum) // passing string - works for text columns; if your column is integer, DB will cast
+                .eq('cliente_indu', Number(clientIdNum)) // ensure numeric match
                 .then(({ error }) => {
                     if (error) {
                         console.error("Erro ao apagar histórico do cliente no Supabase:", error);
@@ -370,7 +373,7 @@ function clientsListClickHandler(e) {
             window.supabase
                 .from('clientes')
                 .delete()
-                .eq('idnum', clientIdNum)
+                .eq('idnum', Number(clientIdNum))
                 .then(({ error }) => {
                     if (error) {
                         console.error("Erro ao apagar cliente no Supabase:", error);
@@ -688,7 +691,7 @@ async function savePurchaseToClient(clientIdNum, purchaseData) {
         }
 
         const payload = {
-            cliente_indu: clientIdNum, // preserve original type passed (DB may be int or text)
+            cliente_indu: (clientIdNum !== null && clientIdNum !== undefined && String(clientIdNum).trim() !== "") ? Number(String(clientIdNum).trim()) : null,
             produto: JSON.stringify(purchase.produtos),
             taxaentrega: purchase.fee,
             total: purchase.total,
