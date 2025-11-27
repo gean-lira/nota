@@ -739,7 +739,7 @@ async function loadHistoryIntoClients() {
     }
 
     // limpa purchases antes
-    clients.forEach(c => { c.purchases = []; });
+    if (Array.isArray(clients)) clients.forEach(c => { c.purchases = []; });
 
     if (!Array.isArray(data) || data.length === 0) {
       console.log("Nenhum registro de histórico retornado do Supabase.");
@@ -747,46 +747,62 @@ async function loadHistoryIntoClients() {
     }
 
     const unmatched = [];
+    const matched = [];
+
+    const norm = v => (v === null || v === undefined) ? "" : String(v).trim();
+    const digits = v => norm(v).replace(/\D+/g, '');
+    const toNumberOrNull = v => {
+      const n = Number(v);
+      return (v !== null && v !== undefined && !isNaN(n)) ? n : null;
+    };
 
     data.forEach(row => {
-      // pega valor cru do histórico (prioriza cliente_indu)
       const rawCliente = row.cliente_indu ?? row.client_id ?? row.cliente ?? null;
+      const rawStr = rawCliente === null || rawCliente === undefined ? null : String(rawCliente).trim();
+      const rawNum = toNumberOrNull(rawCliente);
+      const rawDigits = rawStr ? digits(rawStr) : '';
 
-      // normalizações para comparação
-      const rowStr = rawCliente !== null && rawCliente !== undefined ? String(rawCliente).trim() : null;
-      const rowNum = (rawCliente !== null && rawCliente !== undefined && !isNaN(Number(rawCliente))) ? Number(rawCliente) : null;
+      // find index with deterministic priority
+      let clientIndex = -1;
 
-      if (rowStr === null) {
-        unmatched.push({ row, reason: 'cliente_indu ausente' });
-        return;
+      // 1) numeric exact match against clients[].idNum (preferred)
+      if (rawNum !== null) {
+        clientIndex = clients.findIndex(c => {
+          const candNum = toNumberOrNull(c.idNum ?? c.idnum ?? c.id);
+          return (candNum !== null) && (candNum === rawNum);
+        });
       }
 
-      // busca cliente tolerante a tipos/formato
-      const clientIndex = clients.findIndex(c => {
-        const candRaw = c.idNum ?? c.idnum ?? c.id ?? "";
-        const candStr = candRaw !== null && candRaw !== undefined ? String(candRaw).trim() : "";
-        const candNum = (!isNaN(Number(candRaw)) && candStr !== "") ? Number(candRaw) : null;
+      // 2) numeric match against clients[].id (DB PK) if not found
+      if (clientIndex === -1 && rawNum !== null) {
+        clientIndex = clients.findIndex(c => {
+          const candId = toNumberOrNull(c.id);
+          return (candId !== null) && (candId === rawNum);
+        });
+      }
 
-        // 1) exact string
-        if (candStr && rowStr === candStr) return true;
-        // 2) exact numeric
-        if (rowNum !== null && candNum !== null && rowNum === candNum) return true;
-        // 3) fuzzy contains (prefix/suffix issues)
-        if (candStr && candStr.includes(rowStr)) return true;
-        if (rowStr && rowStr.includes(candStr) && candStr !== "") return true;
-        // 4) compare digits only (remove formatação)
-        const digitsRow = rowStr.replace(/\D+/g, '');
-        const digitsCand = candStr.replace(/\D+/g, '');
-        if (digitsRow && digitsCand && digitsRow === digitsCand) return true;
+      // 3) exact string match (trimmed)
+      if (clientIndex === -1 && rawStr !== null) {
+        clientIndex = clients.findIndex(c => {
+          const candRaw = norm(c.idNum ?? c.idnum ?? c.id);
+          return candRaw && (candRaw === rawStr);
+        });
+      }
 
-        return false;
-      });
+      // 4) digits-only equality (safe)
+      if (clientIndex === -1 && rawDigits) {
+        clientIndex = clients.findIndex(c => {
+          const candDigits = digits(c.idNum ?? c.idnum ?? c.id);
+          return candDigits && (candDigits === rawDigits);
+        });
+      }
 
       if (clientIndex === -1) {
-        unmatched.push({ row, reason: 'não encontrou cliente correspondente' });
+        unmatched.push({ id: row.id, cliente_raw: rawCliente });
         return;
       }
 
+      // associate
       const client = clients[clientIndex];
       if (!Array.isArray(client.purchases)) client.purchases = [];
 
@@ -805,21 +821,19 @@ async function loadHistoryIntoClients() {
         total: row.total ?? 0,
         note: row.obs ?? row.note ?? ""
       });
+
+      matched.push({ historico_id: row.id, clientIndex, clientIdNum: client.idNum });
     });
 
-    const withPurchases = clients.filter(c => (c.purchases || []).length > 0)
-      .map(c => ({ idNum: c.idNum, name: c.name, purchases: c.purchases.length }));
-
-    console.log("Histórico carregado. Clientes com purchases:", withPurchases);
-
+    console.log("Histórico carregado (determinístico). Exemplos de matches:", matched.slice(0,20));
     if (unmatched.length) {
-      console.warn("Registros não associados (exemplo):", unmatched.slice(0, 20));
+      console.warn("Registros não associados (exemplo):", unmatched.slice(0,20));
     } else {
       console.log("Todas as linhas foram associadas.");
     }
 
   } catch (e) {
-    console.error("Exceção ao carregar histórico do Supabase:", e);
+    console.error("Exceção ao carregar histórico (determinístico):", e);
   }
 }
 
@@ -1082,3 +1096,99 @@ domReady(() => {
         }
     })();
 });
+
+/* ================= ADIÇÕES / FIXES FINAIS ================= */
+
+/* openHistoryById: abre o histórico pelo ID (tolerante) - globais existentes são usados (clients) */
+(function(){
+  const $ = id => document.getElementById(id);
+  function norm(s){ return s === null || s === undefined ? "" : String(s).trim(); }
+  function digits(s){ return norm(s).replace(/\D+/g, ''); }
+  function clientsArray(){ if (typeof clients !== 'undefined' && Array.isArray(clients)) return clients; if (typeof window !== 'undefined' && Array.isArray(window.clients)) return window.clients; return []; }
+
+  function findClientIndexByIdRobust(idLike){
+    if (idLike === null || idLike === undefined) return -1;
+    const target = norm(idLike);
+    const targetDigits = digits(target);
+    const targetNum = Number(target);
+    const arr = clientsArray();
+    for (let i=0;i<arr.length;i++){
+      const c = arr[i];
+      const candRaw = norm(c?.idNum ?? c?.idnum ?? c?.id ?? "");
+      const candDigits = digits(candRaw);
+      const candNum = Number(candRaw);
+      if (candRaw && candRaw === target) return i;
+      if (!isNaN(candNum) && !isNaN(targetNum) && candNum === targetNum) return i;
+      if (candDigits && targetDigits && candDigits === targetDigits) return i;
+      if (candRaw && target && candRaw.length >= 3 && target.length >= 3 && (candRaw.includes(target) || target.includes(candRaw))) return i;
+    }
+    return -1;
+  }
+
+  window.openHistoryById = function(idOrIndex){
+    try {
+      const arr = clientsArray();
+      let idx = -1;
+      if (typeof idOrIndex === 'number' && Number.isInteger(idOrIndex) && idOrIndex >= 0 && idOrIndex < arr.length) {
+        idx = idOrIndex;
+      } else {
+        idx = findClientIndexByIdRobust(idOrIndex);
+      }
+
+      const out = $('historyContent');
+      if (idx === -1) {
+        if (out) out.innerHTML = "<div class='muted'>Nenhum registro de compra</div>";
+        const modal = $('historyModal'); if (modal) modal.style.display = 'flex';
+        return;
+      }
+
+      const client = arr[idx];
+      if (!out) return;
+      out.innerHTML = "";
+
+      if (!client.purchases || client.purchases.length === 0) {
+        out.innerHTML = "<div class='muted'>Nenhum registro de compra</div>";
+      } else {
+        client.purchases.forEach(p => {
+          const itens = (p.produtos || []).map(it => {
+            const desc = escapeHtml(it.desc || it.nome || '');
+            const price = Number(it.price || it.preco || 0).toFixed(2).replace('.',',');
+            return `${desc} — R$ ${price}`;
+          }).join('<br>') || '--';
+          const dateText = escapeHtml(p.date || p.created_at || '');
+          // insere os botões com data-action/data-client/data-pid compatíveis com seu handler já existente
+          out.insertAdjacentHTML('beforeend', `
+            <div class="hist-item" style="border-bottom:1px solid #eee;padding:8px 0;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div style="flex:1; margin-right:12px;">
+                  <div><b>${dateText}</b></div>
+                  <div style="margin-top:6px">${itens}</div>
+                  <div style="margin-top:6px">Entrega: R$ ${Number(p.fee||0).toFixed(2).replace('.',',')} • <b>Total: R$ ${Number(p.total||0).toFixed(2).replace('.',',')}</b></div>
+                  <div style="margin-top:6px">Obs: ${escapeHtml(p.note||p.obs||'')}</div>
+                </div>
+                <div style="min-width:120px; text-align:right;">
+                  <button class="ghost small-btn" data-action="view" data-client="${escapeHtmlAttr(String(client.idNum))}" data-pid="${escapeHtmlAttr(String(p.id))}">Imprimir</button>
+                  <button class="ghost small-btn" data-action="del" data-client="${escapeHtmlAttr(String(client.idNum))}" data-pid="${escapeHtmlAttr(String(p.id))}" style="margin-top:6px;">Excluir</button>
+                </div>
+              </div>
+            </div>
+          `);
+        });
+      }
+      out.dataset.index = idx;
+      const modal = $('historyModal'); if (modal) modal.style.display = 'flex';
+    } catch (err) {
+      console.error('openHistoryById erro:', err);
+    }
+  };
+
+  // delegação leve para botões data-a="history"
+  document.addEventListener('click', function(e) {
+    const b = e.target.closest && e.target.closest('button[data-a="history"]');
+    if (!b) return;
+    e.preventDefault && e.preventDefault();
+    const idAttr = b.dataset.id;
+    window.openHistoryById(idAttr);
+  }, { passive: false });
+
+})();
