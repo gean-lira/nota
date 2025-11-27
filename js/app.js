@@ -1097,9 +1097,8 @@ domReady(() => {
     })();
 });
 
-/* ================= ADIÇÕES / FIXES FINAIS ================= */
+/* ================= ADIÇÕES / FIXES FINAIS (SUBSTITUIR AQUI) ================= */
 
-/* openHistoryById: abre o histórico pelo ID (tolerante) - globais existentes são usados (clients) */
 (function(){
   const $ = id => document.getElementById(id);
   function norm(s){ return s === null || s === undefined ? "" : String(s).trim(); }
@@ -1125,10 +1124,13 @@ domReady(() => {
     return -1;
   }
 
+  // openHistoryById: abre o histórico pelo ID (tolerante) e renderiza botões de imprimir/excluir
   window.openHistoryById = function(idOrIndex){
     try {
       const arr = clientsArray();
       let idx = -1;
+
+      // se já recebeu um índice válido, usa direto
       if (typeof idOrIndex === 'number' && Number.isInteger(idOrIndex) && idOrIndex >= 0 && idOrIndex < arr.length) {
         idx = idOrIndex;
       } else {
@@ -1136,59 +1138,70 @@ domReady(() => {
       }
 
       const out = $('historyContent');
+      if (!out) return console.warn('historyContent não encontrado no DOM.');
+
       if (idx === -1) {
-        if (out) out.innerHTML = "<div class='muted'>Nenhum registro de compra</div>";
+        out.innerHTML = "<div class='muted'>Nenhum registro de compra</div>";
         const modal = $('historyModal'); if (modal) modal.style.display = 'flex';
         return;
       }
 
       const client = arr[idx];
-      if (!out) return;
       out.innerHTML = "";
 
       if (!client.purchases || client.purchases.length === 0) {
         out.innerHTML = "<div class='muted'>Nenhum registro de compra</div>";
       } else {
+        // para cada purchase montamos o bloco com botões (view / del)
         client.purchases.forEach(p => {
           const itens = (p.produtos || []).map(it => {
-            const desc = escapeHtml(it.desc || it.nome || '');
-            const price = Number(it.price || it.preco || 0).toFixed(2).replace('.',',');
-            return `${desc} — R$ ${price}`;
+            const desc = it.desc ?? it.nome ?? it.description ?? '';
+            const price = Number(it.price ?? it.preco ?? 0) || 0;
+            return `${escapeHtml(desc)} — R$ ${price.toFixed(2).replace('.',',')}`;
           }).join('<br>') || '--';
-          const dateText = escapeHtml(p.date || p.created_at || '');
-          // insere os botões com data-action/data-client/data-pid compatíveis com seu handler já existente
+
+          const dateText = p.date || p.created_at || String(p.createdAt || "");
+
           out.insertAdjacentHTML('beforeend', `
             <div class="hist-item" style="border-bottom:1px solid #eee;padding:8px 0;">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div style="flex:1; margin-right:12px;">
-                  <div><b>${dateText}</b></div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="flex:1; min-width:0;">
+                  <div><b>${escapeHtml(dateText)}</b></div>
                   <div style="margin-top:6px">${itens}</div>
                   <div style="margin-top:6px">Entrega: R$ ${Number(p.fee||0).toFixed(2).replace('.',',')} • <b>Total: R$ ${Number(p.total||0).toFixed(2).replace('.',',')}</b></div>
                   <div style="margin-top:6px">Obs: ${escapeHtml(p.note||p.obs||'')}</div>
                 </div>
-                <div style="min-width:120px; text-align:right;">
+                <div style="margin-left:12px; text-align:right; white-space:nowrap;">
                   <button class="ghost small-btn" data-action="view" data-client="${escapeHtmlAttr(String(client.idNum))}" data-pid="${escapeHtmlAttr(String(p.id))}">Imprimir</button>
-                  <button class="ghost small-btn" data-action="del" data-client="${escapeHtmlAttr(String(client.idNum))}" data-pid="${escapeHtmlAttr(String(p.id))}" style="margin-top:6px;">Excluir</button>
+                  <button class="ghost small-btn" data-action="del"  data-client="${escapeHtmlAttr(String(client.idNum))}" data-pid="${escapeHtmlAttr(String(p.id))}">Excluir</button>
                 </div>
               </div>
             </div>
           `);
         });
       }
+
       out.dataset.index = idx;
       const modal = $('historyModal'); if (modal) modal.style.display = 'flex';
+
     } catch (err) {
       console.error('openHistoryById erro:', err);
     }
   };
 
-  // delegação leve para botões data-a="history"
+  // delegação leve para botões data-a="history" (abre o histórico tolerante por id)
   document.addEventListener('click', function(e) {
-    const b = e.target.closest && e.target.closest('button[data-a="history"]');
-    if (!b) return;
-    e.preventDefault && e.preventDefault();
-    const idAttr = b.dataset.id;
-    window.openHistoryById(idAttr);
+    try {
+      const b = e.target.closest && e.target.closest('button[data-a="history"]');
+      if (!b) return;
+      e.preventDefault && e.preventDefault();
+      const idAttr = b.dataset.id;
+      window.openHistoryById(idAttr);
+    } catch (err) {
+      console.error('Erro no listener data-a="history":', err);
+    }
   }, { passive: false });
 
+  // garantia: se o seu load inicial já terminou antes dessa injeção, nada quebra.
+  console.log('Patch: openHistoryById definido e delegação para data-a="history" ativa.');
 })();
