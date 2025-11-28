@@ -417,52 +417,73 @@ $("cancelClientNew") && ($("cancelClientNew").onclick = () => {
 });
 
 /* ========== SALVAR CLIENTE (AGORA NO SUPABASE) ========== */
+/* Regra: se o usuário digitar CPF/CNPJ, salva o que digitou.
+   Se deixar em branco, salva em branco (não gera nem preenche automaticamente). */
 $("saveClientNew") && ($("saveClientNew").onclick = async () => {
 
-    const name = $("f_name").value.trim();
+    const name = ($("f_name").value || "").trim();
     if (!name) return alert("Nome obrigatório");
+
+    // o que o usuário digitou no campo CPF/CNPJ (pode ser "")
+    const typedCpfRaw = String(($("f_id").value || "")).trim();
 
     const obj = {
         name,
-        id: $("f_id").value,
-        whatsapp: $("f_wh").value,
-        phone: $("f_phone").value,
-        rua: $("f_rua").value,
-        rua_num: $("f_rua_num").value,
-        bairro: $("f_bairro").value,
-        cidade: $("f_cidade").value,
-        referencia: $("f_ref").value
+        id: typedCpfRaw, // mantém exatamente o que veio do form (pode ser "")
+        whatsapp: ($("f_wh").value || "").trim(),
+        phone: ($("f_phone").value || "").trim(),
+        rua: ($("f_rua").value || "").trim(),
+        rua_num: ($("f_rua_num").value || "").trim(),
+        bairro: ($("f_bairro").value || "").trim(),
+        cidade: ($("f_cidade").value || "").trim(),
+        referencia: ($("f_ref").value || "").trim()
     };
 
-    ["f_name", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"].forEach(fid => {
-        addSuggestion(mapField(fid), $(fid).value);
-    });
+    // salva sugestões (mantém comportamento)
+    ["f_name", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"]
+        .forEach(fid => { addSuggestion(mapField(fid), $(fid).value); });
 
-    // EDITAR CLIENTE EXISTENTE
+    // ===== EDITAR CLIENTE =====
     if (editingIndex !== null && typeof editingIndex !== "undefined") {
-        const existing = clients[editingIndex] || { purchases: [], idNum: newId() };
+        const existing = clients[editingIndex] || { purchases: [], idNum: "" };
+
+        // Regra: se usuário digitou algo em f_id, atualiza idNum; se deixou em branco, NÃO sobrescreve existente.
+        const finalIdForMemory = (typedCpfRaw !== "") ? String(typedCpfRaw) : existing.idNum;
+
         const updated = {
             ...existing,
             ...obj,
-            idNum: existing.idNum,
+            idNum: finalIdForMemory,
             purchases: existing.purchases || []
         };
 
-        const { error } = await window.supabase
-            .from('clientes')
-            .update({
-                idnum: Number(updated.idNum) || updated.idNum,
-                nome: updated.name,
-                whatsapp: updated.whatsapp,
-                telefone: updated.phone,
-                rua: updated.rua,
-                rua_num: updated.rua_num,
-                bairro: updated.bairro,
-                cidade: updated.cidade,
-                referencia: updated.referencia
-            })
-            .eq('idnum', Number(updated.idNum) || updated.idNum);
+        // Prepara payload para o DB: somente inclui idnum se o usuário digitou algo
+        const payload = {
+            nome: updated.name,
+            whatsapp: updated.whatsapp,
+            telefone: updated.phone,
+            rua: updated.rua,
+            rua_num: updated.rua_num,
+            bairro: updated.bairro,
+            cidade: updated.cidade,
+            referencia: updated.referencia
+        };
+        if (typedCpfRaw !== "") {
+            // preserva exatamente o que o usuário digitou (CPF pode conter pontuação)
+            payload.idnum = typedCpfRaw;
+        }
 
+        // Usar PK id se disponível para fazer match; senão usar idnum
+        let query = window.supabase.from('clientes').update(payload);
+        if (existing.id !== null && existing.id !== undefined) {
+            query = query.eq('id', existing.id);
+        } else if (existing.idNum !== "") {
+            query = query.eq('idnum', existing.idNum);
+        } else {
+            console.warn("Não foi possível identificar registro para update (falta id/idnum).");
+        }
+
+        const { error } = await query;
         if (error) {
             console.error("Erro ao atualizar cliente no Supabase:", error);
             alert("Erro ao atualizar no banco: " + (error.message || ""));
@@ -471,52 +492,61 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
 
         clients[editingIndex] = updated;
         renderClients(lastClientsSearchName, lastClientsSearchId);
+        if (typeof hideClientFormModal === "function") hideClientFormModal();
         showInitialScreen();
         return;
     }
 
-    // NOVO CLIENTE
-    obj.idNum = String(newId()); // store as string internally - FIX
-    obj.purchases = [];
+    // ===== NOVO CLIENTE =====
+    // Regra: se typedCpfRaw for "", então NÃO incluímos idnum no INSERT (campo fica em branco/null no DB)
+    const payload = {
+        nome: obj.name,
+        whatsapp: obj.whatsapp,
+        telefone: obj.phone,
+        rua: obj.rua,
+        rua_num: obj.rua_num,
+        bairro: obj.bairro,
+        cidade: obj.cidade,
+        referencia: obj.referencia
+    };
+    if (typedCpfRaw !== "") {
+        payload.idnum = typedCpfRaw; // preserva exatamente o que o usuário digitou
+    }
 
     const { data, error } = await window.supabase
         .from('clientes')
-        .insert([{
-            idnum: Number(obj.idNum), // store numeric in DB
-            nome: obj.name,
-            whatsapp: obj.whatsapp,
-            telefone: obj.phone,
-            rua: obj.rua,
-            rua_num: obj.rua_num,
-            bairro: obj.bairro,
-            cidade: obj.cidade,
-            referencia: obj.referencia
-        }])
+        .insert([payload])
         .select();
 
     if (error) {
-        console.error("message:", error.message);
-        console.error("details:", error.details);
-        console.error("hint:", error.hint);
-        console.error("code:", error.code);
-        console.error("full:", error);
+        console.error("Erro ao inserir cliente:", error);
         alert("Erro ao salvar no banco: " + (error?.message || ""));
         return;
     }
 
-    const row = data && data[0];
-    if (row) {
-        clients.push({
-            ...obj,
-            idNum: String(row.idnum ?? obj.idNum) // ensure string - FIX
-        });
-    } else {
-        clients.push(obj);
-    }
+    const row = Array.isArray(data) ? data[0] : null;
 
+    // adiciona à memória: idNum será o que veio do banco (se retornou) ou o que foi digitado (pode ser "")
+    const newClient = {
+        id: row?.id ?? null,
+        idNum: (row && row.idnum !== undefined && row.idnum !== null) ? String(row.idnum) : (typedCpfRaw || ""),
+        name: obj.name,
+        whatsapp: obj.whatsapp,
+        rua: obj.rua,
+        rua_num: obj.rua_num,
+        bairro: obj.bairro,
+        cidade: obj.cidade,
+        referencia: obj.referencia,
+        purchases: []
+    };
+
+    clients.push(newClient);
     renderClients(lastClientsSearchName, lastClientsSearchId);
+
+    if (typeof hideClientFormModal === "function") hideClientFormModal();
     showInitialScreen();
 });
+
 
 $("backClient") && ($("backClient").onclick = () => {
     showInitialScreen();
