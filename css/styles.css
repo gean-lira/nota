@@ -236,7 +236,7 @@ button.ghost {
     position: sticky;
     top: 0;
     z-index: 50;
-    background-color: #0ea5a8;
+    background-color: #960ea8;
     padding: 10px 0;
 }
 /* === STICKY HEADER: título + busca fixos === */
@@ -253,7 +253,7 @@ button.ghost {
 
 /* garante que o h1 mantenha estilo igual ao que você já tinha */
 .sticky-header h1 {
-    background-color: #0ea5a8;
+    background-color: #960ea8;
     font-size: 22px;
     margin: 0 0 10px 0;
     padding: 6px 12px;
