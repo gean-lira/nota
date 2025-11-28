@@ -1192,3 +1192,139 @@ domReady(() => {
 
   console.log('openHistoryById: versão com botões Imprimir/Excluir injetada.');
 })();
+
+(function installProductModal() {
+  if (window.__productModalHandlerAdded) return console.log('product-modal já instalado');
+  window.__productModalHandlerAdded = true;
+
+  if (!document.getElementById('product-modal-styles')) {
+    const st = document.createElement('style');
+    st.id = 'product-modal-styles';
+    st.textContent = `
+    /* overlay */
+    .pe-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2,6,23,0.45);
+      display: flex;
+      align-items: start;
+      justify-content: center;
+      padding-top: 56px; /* distância do topo */
+      z-index: 99999;
+    }
+    /* container da janela */
+    .pe-window {
+      background: #fff;
+      border-radius: 12px;
+      width: min(940px, calc(100% - 48px));
+      box-shadow: 0 18px 46px rgba(2,6,23,0.36);
+      max-height: calc(100vh - 120px);
+      overflow: auto;
+      padding: 18px;
+      box-sizing: border-box;
+    }
+    .pe-window .pe-header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:10px;
+    }
+    .pe-window .pe-title { font-weight:700; }
+    .pe-window .pe-close {
+      background:transparent;
+      border:1px solid #e6e9ee;
+      padding:6px 10px;
+      border-radius:8px;
+      cursor:pointer;
+      font-weight:700;
+    }
+    @media (max-width:520px){
+      .pe-window { width: calc(100% - 20px); padding:12px }
+    }`;
+    document.head.appendChild(st);
+  }
+
+  function showProductModal(cardEl) {
+    const pa = document.getElementById('product-area');
+    if (!pa) return console.warn('product-area não encontrado.');
+
+    if (document.getElementById('pe-overlay')) {
+      setTimeout(()=> pa.querySelector('input,button,textarea,select')?.focus(), 100);
+      return;
+    }
+
+    pa.__orig_parent = pa.parentNode;
+    pa.__orig_next = pa.nextSibling;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'pe-overlay';
+    overlay.className = 'pe-overlay';
+
+    const win = document.createElement('div');
+    win.className = 'pe-window';
+    win.innerHTML = `
+      <div class="pe-header">
+        <div class="pe-title">Selecionado: <span id="pe-selected-name"></span></div>
+        <div><button class="pe-close" type="button">Fechar ✕</button></div>
+      </div>
+    `;
+
+    win.appendChild(pa);
+    pa.style.display = pa.__origDisplay || 'block';
+
+    overlay.appendChild(win);
+    document.body.appendChild(overlay);
+
+    const selName = document.getElementById('selectedLabel')?.innerText || '';
+    const t = document.getElementById('pe-selected-name');
+    if (t) t.innerText = selName;
+
+    setTimeout(()=> pa.querySelector('input,button,textarea,select')?.focus(), 120);
+
+    overlay.querySelector('.pe-close').addEventListener('click', hideProductModal);
+
+    overlay.addEventListener('click', function(e){
+      if (e.target === overlay) hideProductModal();
+    });
+
+    function escHandler(ev){
+      if (ev.key === 'Escape') hideProductModal();
+    }
+    document.addEventListener('keydown', escHandler);
+
+    overlay.__escHandler = escHandler;
+  }
+
+  function hideProductModal() {
+    const overlay = document.getElementById('pe-overlay');
+    const pa = document.getElementById('product-area');
+    if (!overlay) return;
+    const esc = overlay.__escHandler;
+    if (esc) document.removeEventListener('keydown', esc);
+    if (pa && pa.__orig_parent) {
+      try {
+        const parent = pa.__orig_parent;
+        const next = pa.__orig_next;
+        if (next && next.parentNode === parent) parent.insertBefore(pa, next);
+        else parent.appendChild(pa);
+        pa.style.display = 'none';
+      } catch(e){ console.warn('erro devolvendo product-area', e); }
+    }
+    overlay.remove();
+  }
+
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest && e.target.closest('button');
+    if (!btn) return;
+    if ((btn.innerText || btn.textContent || '').trim().toLowerCase() !== 'selecionar') return;
+    setTimeout(()=> {
+      const card = btn.closest('.client-card') || btn.closest('.card');
+      showProductModal(card);
+    }, 10);
+  }, true);
+
+  window.showProductModal = showProductModal;
+  window.hideProductModal = hideProductModal;
+
+  console.log('product-modal instalado — ao clicar em "Selecionar" abre como janela no topo.');
+})();
