@@ -94,13 +94,22 @@
 <body>
 
     <div class="wrap">
-        <h1 class="top-fixed">Clientes</h1>
+       <div class="sticky-header">
 
+    <h1>Clientes</h1>
 
-        <div class="app">
+    <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <input id="searchId" placeholder="ID" style="width:90px" list="s_searchId">
+            <input id="searchName" placeholder="Nome" style="flex:1" list="s_searchName">
+            <button id="btnNew" class="small-btn">Novo</button>
+        </div>
+    </div>
 
-            <!-- TELA DE CLIENTES (TELA INICIAL) -->
-            <div class="card" id="client-area">
+</div>
+
+<div class="app">
+
 
                 <div style="display:flex; gap:8px; margin-bottom:12px;">
                     <input id="searchId" placeholder="ID" style="width:90px" list="s_searchId">

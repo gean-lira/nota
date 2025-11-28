@@ -239,3 +239,27 @@ button.ghost {
     background-color: #0ea5a8;
     padding: 10px 0;
 }
+/* === STICKY HEADER: título + busca fixos === */
+.sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: #f3f6fb;   /* mesma cor do fundo da página */
+    padding-top: 8px;
+    padding-bottom: 8px;
+    /* pequena sombra pra separar visualmente */
+    box-shadow: 0 2px 6px rgba(16,24,40,0.04);
+}
+
+/* garante que o h1 mantenha estilo igual ao que você já tinha */
+.sticky-header h1 {
+    background-color: #0ea5a8;
+    font-size: 22px;
+    margin: 0 0 10px 0;
+    padding: 6px 12px;
+}
+
+/* se seu .card já tem borda/raio/padding, mantém; ajuste só margem */
+.sticky-header .card {
+    margin: 0 0 12px 0;
+}
