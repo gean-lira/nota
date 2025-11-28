@@ -302,7 +302,7 @@ function clientsListClickHandler(e) {
     const i = (typeof idAttr !== 'undefined') ? clients.findIndex(c => String(c.idNum).trim() === String(idAttr).trim()) : Number(iAttr);
     const c = clients[i];
 
-    if (!c && a !== "del") return;
+    if (!c) return;
 
     if (a === "select") {
         selectedClientId = String(c.idNum);  // força string pra não perder referência
@@ -316,10 +316,10 @@ function clientsListClickHandler(e) {
     if (a === "edit") {
         editingIndex = i;
 
-        // Abre o modal do cliente (nova UX)
-        showClientFormModal();
+        if ($("client-area")) $("client-area").style.display = "none";
+        if ($("product-area")) $("product-area").style.display = "none";
+        if ($("clientFormCard")) $("clientFormCard").style.display = "block";
 
-        // Preenche o formulário com os dados do cliente
         $("f_name").value = c.name || "";
         $("f_id").value = c.id ?? c.idNum ?? "";
         $("f_wh").value = c.whatsapp || "";
@@ -391,175 +391,24 @@ function bindClientsList() {
     if (clist) clist.onclick = clientsListClickHandler;
 }
 
-/* === Modal para formulário de cliente (novo/editar) ===
-   Mantém o #clientFormCard HTML existente; quando abrimos o modal
-   movemos o node para dentro do overlay e focamos o primeiro campo.
-*/
-(function installClientFormModal() {
-  if (window.__clientFormModalInstalled) return;
-  window.__clientFormModalInstalled = true;
-
-  // injeta estilos se necessário
-  if (!document.getElementById('client-modal-styles')) {
-    const st = document.createElement('style');
-    st.id = 'client-modal-styles';
-    st.textContent = `
-    .cf-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(2,6,23,0.45);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 99999;
-      padding: 20px;
-    }
-    .cf-window {
-      background: #fff;
-      border-radius: 12px;
-      width: min(820px, calc(100% - 40px));
-      max-height: calc(100vh - 60px);
-      overflow: auto;
-      box-shadow: 0 18px 46px rgba(2,6,23,0.36);
-      padding: 16px;
-      box-sizing: border-box;
-    }
-    @media (max-width:520px){
-      .cf-window { width: calc(100% - 20px); padding:12px }
-    }
-    `;
-    document.head.appendChild(st);
-  }
-
-  // abre modal movendo o elemento #clientFormCard para dentro do overlay
-  window.showClientFormModal = function() {
-    const form = document.getElementById('clientFormCard');
-    if (!form) return console.warn('clientFormCard não encontrado.');
-
-    // já aberto?
-    if (document.getElementById('cf-overlay')) {
-      setTimeout(()=> form.querySelector('input,button,textarea,select')?.focus(), 50);
-      return;
-    }
-
-    // guarda posicionamento original
-    form.__orig_parent = form.parentNode;
-    form.__orig_next = form.nextSibling;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'cf-overlay';
-    overlay.className = 'cf-overlay';
-
-    const win = document.createElement('div');
-    win.className = 'cf-window';
-
-    // adiciona botão fechar no topo para consistência (preserva seu conteúdo)
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.style.marginBottom = '8px';
-
-    const title = document.createElement('div');
-    title.style.fontWeight = '700';
-    title.innerText = editingIndex !== null ? 'Editar Cliente' : 'Novo Cliente';
-
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'pe-close';
-    closeBtn.innerText = 'Fechar ✕';
-    closeBtn.style.background = 'transparent';
-    closeBtn.style.border = '1px solid #e6e9ee';
-    closeBtn.style.padding = '6px 10px';
-    closeBtn.style.borderRadius = '8px';
-    closeBtn.style.cursor = 'pointer';
-    closeBtn.addEventListener('click', hideClientFormModal);
-
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-
-    win.appendChild(header);
-    win.appendChild(form);
-
-    overlay.appendChild(win);
-    document.body.appendChild(overlay);
-
-    // mostra o form (garante display block)
-    form.style.display = form.__origDisplay || 'block';
-
-    // focus no primeiro campo
-    setTimeout(()=> form.querySelector('input,button,textarea,select')?.focus(), 120);
-
-    // fechar clicando fora
-    overlay.addEventListener('click', function(e){
-      if (e.target === overlay) hideClientFormModal();
-    });
-
-    // fechar com ESC
-    function escHandler(ev){
-      if (ev.key === 'Escape') hideClientFormModal();
-    }
-    document.addEventListener('keydown', escHandler);
-    overlay.__escHandler = escHandler;
-  };
-
-  window.hideClientFormModal = function() {
-    const overlay = document.getElementById('cf-overlay');
-    const form = document.getElementById('clientFormCard');
-    if (!overlay) return;
-    const esc = overlay.__escHandler;
-    if (esc) document.removeEventListener('keydown', esc);
-    if (form && form.__orig_parent) {
-      try {
-        const parent = form.__orig_parent;
-        const next = form.__orig_next;
-        if (next && next.parentNode === parent) parent.insertBefore(form, next);
-        else parent.appendChild(form);
-        form.style.display = 'none';
-      } catch(e){ console.warn('erro devolvendo clientFormCard', e); }
-    }
-    overlay.remove();
-  };
-
-  // intercepta botoes que abririam o form de outra forma (por segurança)
-  document.addEventListener('click', function(e){
-    const btn = e.target.closest && e.target.closest('button');
-    if (!btn) return;
-    // se existir botão com id btnNew, ele já está wired abaixo; isso é só fallback
-    if ((btn.id || '').toString() === 'btnNew') {
-      e.preventDefault();
-      editingIndex = null;
-      // limpa campos
-      ["f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"]
-        .forEach(id => { if ($(id)) $(id).value = ""; });
-      showClientFormModal();
-      setTimeout(()=> { try { $("f_name").focus(); } catch (e) { } }, 40);
-    }
-  }, { passive: false });
-
-  console.log('client-form modal instalado.');
-})();
-
-/* Remapeamos o botão btnNew para abrir modal (mantendo comportamento anterior) */
 $("btnNew") && ($("btnNew").onclick = () => {
     editingIndex = null;
 
-    // limpa campos
+    if ($("client-area")) $("client-area").style.display = "none";
+    if ($("product-area")) $("product-area").style.display = "none";
+    if ($("clientFormCard")) $("clientFormCard").style.display = "block";
+
     ["f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"]
         .forEach(id => { if ($(id)) $(id).value = ""; });
-
-    // abre modal (nova UX)
-    showClientFormModal();
 
     setTimeout(() => { try { $("f_name").focus(); } catch (e) { } }, 40);
 });
 
-/* closeForm e cancelClientNew agora fecham modal */
 $("closeForm") && ($("closeForm").onclick = () => {
-    hideClientFormModal();
+    showInitialScreen();
 });
+
 $("cancelClientNew") && ($("cancelClientNew").onclick = () => {
-    hideClientFormModal();
     selectedClientId = null;
     if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
     products = [];
@@ -622,7 +471,6 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
 
         clients[editingIndex] = updated;
         renderClients(lastClientsSearchName, lastClientsSearchId);
-        hideClientFormModal();
         showInitialScreen();
         return;
     }
@@ -667,11 +515,9 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
     }
 
     renderClients(lastClientsSearchName, lastClientsSearchId);
-    hideClientFormModal();
     showInitialScreen();
 });
 
-/* backClient volta à tela inicial - mantemos */
 $("backClient") && ($("backClient").onclick = () => {
     showInitialScreen();
 });
@@ -762,14 +608,14 @@ function buildPrint(obj) {
     return `
     
    <div class="no-break" style="
-    width:100%;
-    max-width:80mm;
-    padding:8px 10px;
-    font-size:12px;
+    width:80mm;
+    padding:10px 16px;
+    font-size:19px;
     font-family: Arial, Helvetica, sans-serif;
 ">
 
-      <div style="text-align:center; font-weight:700; margin-bottom:10px; font-size:14px;">NOTA DE ENTREGA</div>
+
+      <div style="text-align:center; font-weight:700; margin-bottom:18px; font-size:20px;">NOTA DE ENTREGA</div>
 
       <div style="margin:4px 0;">Data: ${escapeHtml(date || "")}</div>
       <div style="margin:4px 0;">Venda: ${escapeHtml(obj.venda || "")}</div>
