@@ -231,3 +231,11 @@ button.ghost {
 .pager button:disabled{opacity:0.45;cursor:default}
 .pager button.active{background:#0ea5a8;color:#fff;border-color:#0b7072}
 .pager .info{margin-left:10px;font-size:13px;color:#6b7280}
+
+.top-fixed {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background-color: #0ea5a8;
+    padding: 10px 0;
+}
