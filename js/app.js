@@ -302,7 +302,7 @@ function clientsListClickHandler(e) {
     const i = (typeof idAttr !== 'undefined') ? clients.findIndex(c => String(c.idNum).trim() === String(idAttr).trim()) : Number(iAttr);
     const c = clients[i];
 
-    if (!c) return;
+    if (!c && a !== "del") return;
 
     if (a === "select") {
         selectedClientId = String(c.idNum);  // força string pra não perder referência
@@ -316,10 +316,10 @@ function clientsListClickHandler(e) {
     if (a === "edit") {
         editingIndex = i;
 
-        if ($("client-area")) $("client-area").style.display = "none";
-        if ($("product-area")) $("product-area").style.display = "none";
-        if ($("clientFormCard")) $("clientFormCard").style.display = "block";
+        // Abre o modal do cliente (nova UX)
+        showClientFormModal();
 
+        // Preenche o formulário com os dados do cliente
         $("f_name").value = c.name || "";
         $("f_id").value = c.id ?? c.idNum ?? "";
         $("f_wh").value = c.whatsapp || "";
@@ -391,24 +391,175 @@ function bindClientsList() {
     if (clist) clist.onclick = clientsListClickHandler;
 }
 
+/* === Modal para formulário de cliente (novo/editar) ===
+   Mantém o #clientFormCard HTML existente; quando abrimos o modal
+   movemos o node para dentro do overlay e focamos o primeiro campo.
+*/
+(function installClientFormModal() {
+  if (window.__clientFormModalInstalled) return;
+  window.__clientFormModalInstalled = true;
+
+  // injeta estilos se necessário
+  if (!document.getElementById('client-modal-styles')) {
+    const st = document.createElement('style');
+    st.id = 'client-modal-styles';
+    st.textContent = `
+    .cf-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2,6,23,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      padding: 20px;
+    }
+    .cf-window {
+      background: #fff;
+      border-radius: 12px;
+      width: min(820px, calc(100% - 40px));
+      max-height: calc(100vh - 60px);
+      overflow: auto;
+      box-shadow: 0 18px 46px rgba(2,6,23,0.36);
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    @media (max-width:520px){
+      .cf-window { width: calc(100% - 20px); padding:12px }
+    }
+    `;
+    document.head.appendChild(st);
+  }
+
+  // abre modal movendo o elemento #clientFormCard para dentro do overlay
+  window.showClientFormModal = function() {
+    const form = document.getElementById('clientFormCard');
+    if (!form) return console.warn('clientFormCard não encontrado.');
+
+    // já aberto?
+    if (document.getElementById('cf-overlay')) {
+      setTimeout(()=> form.querySelector('input,button,textarea,select')?.focus(), 50);
+      return;
+    }
+
+    // guarda posicionamento original
+    form.__orig_parent = form.parentNode;
+    form.__orig_next = form.nextSibling;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'cf-overlay';
+    overlay.className = 'cf-overlay';
+
+    const win = document.createElement('div');
+    win.className = 'cf-window';
+
+    // adiciona botão fechar no topo para consistência (preserva seu conteúdo)
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.marginBottom = '8px';
+
+    const title = document.createElement('div');
+    title.style.fontWeight = '700';
+    title.innerText = editingIndex !== null ? 'Editar Cliente' : 'Novo Cliente';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'pe-close';
+    closeBtn.innerText = 'Fechar ✕';
+    closeBtn.style.background = 'transparent';
+    closeBtn.style.border = '1px solid #e6e9ee';
+    closeBtn.style.padding = '6px 10px';
+    closeBtn.style.borderRadius = '8px';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.addEventListener('click', hideClientFormModal);
+
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+
+    win.appendChild(header);
+    win.appendChild(form);
+
+    overlay.appendChild(win);
+    document.body.appendChild(overlay);
+
+    // mostra o form (garante display block)
+    form.style.display = form.__origDisplay || 'block';
+
+    // focus no primeiro campo
+    setTimeout(()=> form.querySelector('input,button,textarea,select')?.focus(), 120);
+
+    // fechar clicando fora
+    overlay.addEventListener('click', function(e){
+      if (e.target === overlay) hideClientFormModal();
+    });
+
+    // fechar com ESC
+    function escHandler(ev){
+      if (ev.key === 'Escape') hideClientFormModal();
+    }
+    document.addEventListener('keydown', escHandler);
+    overlay.__escHandler = escHandler;
+  };
+
+  window.hideClientFormModal = function() {
+    const overlay = document.getElementById('cf-overlay');
+    const form = document.getElementById('clientFormCard');
+    if (!overlay) return;
+    const esc = overlay.__escHandler;
+    if (esc) document.removeEventListener('keydown', esc);
+    if (form && form.__orig_parent) {
+      try {
+        const parent = form.__orig_parent;
+        const next = form.__orig_next;
+        if (next && next.parentNode === parent) parent.insertBefore(form, next);
+        else parent.appendChild(form);
+        form.style.display = 'none';
+      } catch(e){ console.warn('erro devolvendo clientFormCard', e); }
+    }
+    overlay.remove();
+  };
+
+  // intercepta botoes que abririam o form de outra forma (por segurança)
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest && e.target.closest('button');
+    if (!btn) return;
+    // se existir botão com id btnNew, ele já está wired abaixo; isso é só fallback
+    if ((btn.id || '').toString() === 'btnNew') {
+      e.preventDefault();
+      editingIndex = null;
+      // limpa campos
+      ["f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"]
+        .forEach(id => { if ($(id)) $(id).value = ""; });
+      showClientFormModal();
+      setTimeout(()=> { try { $("f_name").focus(); } catch (e) { } }, 40);
+    }
+  }, { passive: false });
+
+  console.log('client-form modal instalado.');
+})();
+
+/* Remapeamos o botão btnNew para abrir modal (mantendo comportamento anterior) */
 $("btnNew") && ($("btnNew").onclick = () => {
     editingIndex = null;
 
-    if ($("client-area")) $("client-area").style.display = "none";
-    if ($("product-area")) $("product-area").style.display = "none";
-    if ($("clientFormCard")) $("clientFormCard").style.display = "block";
-
+    // limpa campos
     ["f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"]
         .forEach(id => { if ($(id)) $(id).value = ""; });
+
+    // abre modal (nova UX)
+    showClientFormModal();
 
     setTimeout(() => { try { $("f_name").focus(); } catch (e) { } }, 40);
 });
 
+/* closeForm e cancelClientNew agora fecham modal */
 $("closeForm") && ($("closeForm").onclick = () => {
-    showInitialScreen();
+    hideClientFormModal();
 });
-
 $("cancelClientNew") && ($("cancelClientNew").onclick = () => {
+    hideClientFormModal();
     selectedClientId = null;
     if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
     products = [];
@@ -471,6 +622,7 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
 
         clients[editingIndex] = updated;
         renderClients(lastClientsSearchName, lastClientsSearchId);
+        hideClientFormModal();
         showInitialScreen();
         return;
     }
@@ -515,9 +667,11 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
     }
 
     renderClients(lastClientsSearchName, lastClientsSearchId);
+    hideClientFormModal();
     showInitialScreen();
 });
 
+/* backClient volta à tela inicial - mantemos */
 $("backClient") && ($("backClient").onclick = () => {
     showInitialScreen();
 });
@@ -608,14 +762,14 @@ function buildPrint(obj) {
     return `
     
    <div class="no-break" style="
-    width:80mm;
-    padding:10px 16px;
-    font-size:19px;
+    width:100%;
+    max-width:80mm;
+    padding:8px 10px;
+    font-size:12px;
     font-family: Arial, Helvetica, sans-serif;
 ">
 
-
-      <div style="text-align:center; font-weight:700; margin-bottom:18px; font-size:20px;">NOTA DE ENTREGA</div>
+      <div style="text-align:center; font-weight:700; margin-bottom:10px; font-size:14px;">NOTA DE ENTREGA</div>
 
       <div style="margin:4px 0;">Data: ${escapeHtml(date || "")}</div>
       <div style="margin:4px 0;">Venda: ${escapeHtml(obj.venda || "")}</div>
@@ -1017,314 +1171,4 @@ $("historyContent") && ($("historyContent").onclick = function (e) {
                 if (pa) pa.innerHTML = "";
                 // volta tela inicial (mantém cliente desmarcado)
                 selectedClientId = null;
-                if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
-                showInitialScreen();
-            } finally {
-                printingLock = false;
-                window.removeEventListener('afterprint', afterPrintCleanup);
-            }
-        };
-
-        window.addEventListener('afterprint', afterPrintCleanup);
-
-        try {
-            window.print();
-        } catch (err) {
-            console.error("Erro ao imprimir histórico:", err);
-            afterPrintCleanup();
-        }
-
-        return;
-    }
-});
-
-$("closeHistory") && ($("closeHistory").onclick = () => { if ($("historyModal")) $("historyModal").style.display = "none"; });
-document.getElementById("historyModal") && (document.getElementById("historyModal").onclick = (e) => { if (e.target.id === "historyModal") $("historyModal").style.display = "none"; });
-
-/* Ajuste: buscas devem resetar a paginação para 1 */
-$("searchName") && ($("searchName").oninput = () => { currentClientsPage = 1; renderClients($("searchName").value, $("searchId").value); });
-$("searchId") && ($("searchId").oninput = () => { currentClientsPage = 1; renderClients($("searchName").value, $("searchId").value); });
-
-/* DOM ready wrapper */
-function domReady(fn) {
-    if (document.readyState === "complete" || document.readyState === "interactive") {
-        setTimeout(fn, 1);
-    } else {
-        document.addEventListener("DOMContentLoaded", fn);
-    }
-}
-
-/* initial render and attach listeners for suggestions */
-domReady(() => {
-    (async () => {
-        try {
-            const { data, error } = await window.supabase
-                .from('clientes')
-                .select('*')
-                .order('id', { ascending: true });
-
-            if (!error && Array.isArray(data)) {
-                clients = data.map(c => {
-                    // normalize idNum to STRING to avoid type mismatch when matching with historico.cliente_indu - FIX
-                    const rawIdNum = c.idnum ?? c.idNum ?? c.id ?? "";
-                    return {
-                        id: c.id || c.euia || c.id,
-                        idNum: rawIdNum !== null && rawIdNum !== undefined ? String(rawIdNum).trim() : "",
-                        name: c.nome || c.name || c.nome,
-                        whatsapp: c.whatsapp || c.WhatsApp,
-                        rua: c.rua,
-                        rua_num: c.rua_num,
-                        bairro: c.bairro,
-                        cidade: c.cidade,
-                        referencia: c.referencia,
-                        purchases: []
-                    };
-                });
-            }
-
-            await loadHistoryIntoClients();
-
-        } catch (e) {
-            console.error('Erro ao buscar clientes do Supabase', e);
-        } finally {
-            renderClients();
-            renderProducts();
-            renderAllDatalists();
-            attachSuggestionListeners();
-            bindClientsList();
-            // bind pagination not needed because renderClientsPagination wires its own events
-        }
-    })();
-});
-
-/* ================= ADIÇÕES / FIXES FINAIS (SUBSTITUIR AQUI) ================= */
-
-(function(){
-  const $ = id => document.getElementById(id);
-  function norm(s){ return s === null || s === undefined ? "" : String(s).trim(); }
-  function digits(s){ return norm(s).replace(/\D+/g, ''); }
-  function clientsArray(){ if (typeof clients !== 'undefined' && Array.isArray(clients)) return clients; if (typeof window !== 'undefined' && Array.isArray(window.clients)) return window.clients; return []; }
-
-  function findClientIndexByIdRobust(idLike){
-    if (idLike === null || idLike === undefined) return -1;
-    const target = norm(idLike);
-    const targetDigits = digits(target);
-    const targetNum = Number(target);
-    const arr = clientsArray();
-    for (let i=0;i<arr.length;i++){
-      const c = arr[i];
-      const candRaw = norm(c?.idNum ?? c?.idnum ?? c?.id ?? "");
-      const candDigits = digits(candRaw);
-      const candNum = Number(candRaw);
-      if (candRaw && candRaw === target) return i;
-      if (!isNaN(candNum) && !isNaN(targetNum) && candNum === targetNum) return i;
-      if (candDigits && targetDigits && candDigits === targetDigits) return i;
-      if (candRaw && target && candRaw.length >= 3 && target.length >= 3 && (candRaw.includes(target) || target.includes(candRaw))) return i;
-    }
-    return -1;
-  }
-
-  window.openHistoryById = function(idOrIndex){
-    try {
-      const arr = clientsArray();
-      let idx = -1;
-      if (typeof idOrIndex === 'number' && Number.isInteger(idOrIndex) && idOrIndex >= 0 && idOrIndex < arr.length) {
-        idx = idOrIndex;
-      } else {
-        idx = findClientIndexByIdRobust(idOrIndex);
-      }
-
-      const out = $('historyContent');
-      if (!out) {
-        console.warn('historyContent não encontrado no DOM.');
-        return;
-      }
-
-      if (idx === -1) {
-        out.innerHTML = "<div class='muted'>Nenhum registro de compra</div>";
-        const modal = $('historyModal'); if (modal) modal.style.display = 'flex';
-        return;
-      }
-
-      const client = arr[idx];
-      out.innerHTML = "";
-
-      if (!client.purchases || client.purchases.length === 0) {
-        out.innerHTML = "<div class='muted'>Nenhum registro de compra</div>";
-      } else {
-        client.purchases.forEach(p => {
-          const itens = (p.produtos || [])
-            .map(it => `${escapeHtml(it.desc||it.nome||'')} — R$ ${Number(it.price||it.preco||0).toFixed(2).replace('.',',')}`)
-            .join('<br>') || '--';
-          const dateText = p.date || p.created_at || '';
-
-          // monta bloco com botões (view = imprimir, del = excluir)
-          out.insertAdjacentHTML('beforeend', `
-            <div class="hist-item" style="border-bottom:1px solid #eee;padding:8px 0;">
-              <div><b>${escapeHtml(dateText)}</b></div>
-              <div style="margin-top:6px">${itens}</div>
-              <div style="margin-top:6px">Entrega: R$ ${Number(p.fee||0).toFixed(2).replace('.',',')} • <b>Total: R$ ${Number(p.total||0).toFixed(2).replace('.',',')}</b></div>
-              <div style="margin-top:6px">Obs: ${escapeHtml(p.note||p.obs||'')}</div>
-              <div style="margin-top:8px; text-align:right;">
-                <button class="ghost small-btn" data-action="view" data-client="${escapeHtmlAttr(String(client.idNum||client.id||''))}" data-pid="${escapeHtmlAttr(String(p.id||''))}">Imprimir</button>
-                <button class="ghost small-btn" data-action="del"  data-client="${escapeHtmlAttr(String(client.idNum||client.id||''))}" data-pid="${escapeHtmlAttr(String(p.id||''))}">Excluir</button>
-              </div>
-            </div>
-          `);
-        });
-      }
-
-      out.dataset.index = idx;
-      const modal = $('historyModal'); if (modal) modal.style.display = 'flex';
-    } catch (err) {
-      console.error('openHistoryById erro:', err);
-    }
-  };
-
-  // delegação leve para botões data-a="history" dos cartões (mantém seu comportamento)
-  document.addEventListener('click', function(e) {
-    const b = e.target.closest && e.target.closest('button[data-a="history"]');
-    if (!b) return;
-    e.preventDefault && e.preventDefault();
-    const idAttr = b.dataset.id;
-    window.openHistoryById(idAttr);
-  }, { passive: false });
-
-  console.log('openHistoryById: versão com botões Imprimir/Excluir injetada.');
-})();
-
-(function installProductModal() {
-  if (window.__productModalHandlerAdded) return console.log('product-modal já instalado');
-  window.__productModalHandlerAdded = true;
-
-  if (!document.getElementById('product-modal-styles')) {
-    const st = document.createElement('style');
-    st.id = 'product-modal-styles';
-    st.textContent = `
-    /* overlay */
-    .pe-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(2,6,23,0.45);
-      display: flex;
-      align-items: start;
-      justify-content: center;
-      padding-top: 56px; /* distância do topo */
-      z-index: 99999;
-    }
-    /* container da janela */
-    .pe-window {
-      background: #fff;
-      border-radius: 12px;
-      width: min(940px, calc(100% - 48px));
-      box-shadow: 0 18px 46px rgba(2,6,23,0.36);
-      max-height: calc(100vh - 120px);
-      overflow: auto;
-      padding: 18px;
-      box-sizing: border-box;
-    }
-    .pe-window .pe-header {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      margin-bottom:10px;
-    }
-    .pe-window .pe-title { font-weight:700; }
-    .pe-window .pe-close {
-      background:transparent;
-      border:1px solid #e6e9ee;
-      padding:6px 10px;
-      border-radius:8px;
-      cursor:pointer;
-      font-weight:700;
-    }
-    @media (max-width:520px){
-      .pe-window { width: calc(100% - 20px); padding:12px }
-    }`;
-    document.head.appendChild(st);
-  }
-
-  function showProductModal(cardEl) {
-    const pa = document.getElementById('product-area');
-    if (!pa) return console.warn('product-area não encontrado.');
-
-    if (document.getElementById('pe-overlay')) {
-      setTimeout(()=> pa.querySelector('input,button,textarea,select')?.focus(), 100);
-      return;
-    }
-
-    pa.__orig_parent = pa.parentNode;
-    pa.__orig_next = pa.nextSibling;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'pe-overlay';
-    overlay.className = 'pe-overlay';
-
-    const win = document.createElement('div');
-    win.className = 'pe-window';
-    win.innerHTML = `
-      <div class="pe-header">
-        <div class="pe-title">Selecionado: <span id="pe-selected-name"></span></div>
-        <div><button class="pe-close" type="button">Fechar ✕</button></div>
-      </div>
-    `;
-
-    win.appendChild(pa);
-    pa.style.display = pa.__origDisplay || 'block';
-
-    overlay.appendChild(win);
-    document.body.appendChild(overlay);
-
-    const selName = document.getElementById('selectedLabel')?.innerText || '';
-    const t = document.getElementById('pe-selected-name');
-    if (t) t.innerText = selName;
-
-    setTimeout(()=> pa.querySelector('input,button,textarea,select')?.focus(), 120);
-
-    overlay.querySelector('.pe-close').addEventListener('click', hideProductModal);
-
-    overlay.addEventListener('click', function(e){
-      if (e.target === overlay) hideProductModal();
-    });
-
-    function escHandler(ev){
-      if (ev.key === 'Escape') hideProductModal();
-    }
-    document.addEventListener('keydown', escHandler);
-
-    overlay.__escHandler = escHandler;
-  }
-
-  function hideProductModal() {
-    const overlay = document.getElementById('pe-overlay');
-    const pa = document.getElementById('product-area');
-    if (!overlay) return;
-    const esc = overlay.__escHandler;
-    if (esc) document.removeEventListener('keydown', esc);
-    if (pa && pa.__orig_parent) {
-      try {
-        const parent = pa.__orig_parent;
-        const next = pa.__orig_next;
-        if (next && next.parentNode === parent) parent.insertBefore(pa, next);
-        else parent.appendChild(pa);
-        pa.style.display = 'none';
-      } catch(e){ console.warn('erro devolvendo product-area', e); }
-    }
-    overlay.remove();
-  }
-
-  document.addEventListener('click', function(e){
-    const btn = e.target.closest && e.target.closest('button');
-    if (!btn) return;
-    if ((btn.innerText || btn.textContent || '').trim().toLowerCase() !== 'selecionar') return;
-    setTimeout(()=> {
-      const card = btn.closest('.client-card') || btn.closest('.card');
-      showProductModal(card);
-    }, 10);
-  }, true);
-
-  window.showProductModal = showProductModal;
-  window.hideProductModal = hideProductModal;
-
-  console.log('product-modal instalado — ao clicar em "Selecionar" abre como janela no topo.');
-})();
+                if ($("selectedLabel"))
