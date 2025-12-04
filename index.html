@@ -349,7 +349,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <script>
         (function () {
             // ====== CONFIGURAÇÃO (edite aqui se quiser) ======
-            const CREDENTIALS = { user: "admin", pass: "1234" }; // validação local (teste)
+            const CREDENTIALS = { user: "admin", pass: "123456" }; // validação local (teste)
             const MAX_ATTEMPTS = 5;     // tentativas antes do bloqueio
             const LOCKOUT_SECONDS = 30; // duração do bloqueio (s)
             // ==================================================
@@ -538,23 +538,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 injectLogout();
             }
 
-            // --- botão logout dinâmico ---
-            function injectLogout() {
-                if (!document.querySelector('.logout-btn')) {
-                    const b = document.createElement('button');
-                    b.className = 'logout-btn';
-                    b.textContent = 'Sair';
-                    b.title = 'Sair';
-                    b.addEventListener('click', () => {
-                        // limpar persistência e recarregar para mostrar modal novamente
-                        localStorage.removeItem('persist_logged_v2');
-                        localStorage.removeItem('saved_username_v2');
-                        sessionStorage.removeItem('persist_logged_v2');
-                        location.reload();
-                    });
-                    document.body.appendChild(b);
-                }
-            }
 
             // --- validação (local) - altere para integrar com API em produção ---
             function validate(u, p) {
@@ -639,6 +622,87 @@ document.addEventListener("DOMContentLoaded", () => {
             setTimeout(() => inpUser.focus(), 120);
         })();
     </script>
+
+    <!-- BOTÕES FIXOS: Voltar / Sair -->
+<div class="fixed-buttons" aria-hidden="false">
+  <button class="btn-back" type="button" onclick="handleBackClick()" title="Voltar">Voltar</button>
+  <button class="btn-logout" type="button" onclick="handleLogoutClick()" title="Sair">Sair</button>
+</div>
+<script>
+  // handlers seguros para os botões fixos
+  window.handleLogoutClick = function() {
+    try {
+      // remove a chave de login que seu script usa (ajuste a key se necessário)
+      // se você usa outra key, substitua 'LOGIN_KEY' abaixo
+      const possibleKeys = ['LOGIN_KEY', 'nota_entrega_login', 'login_status', 'app_logged']; 
+      possibleKeys.forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
+
+      // se houver função de logout já no app, chama-a
+      if (typeof window.logoutAdmin === 'function') {
+        try { window.logoutAdmin(); return; } catch(e) {}
+      }
+
+      // fallback: recarrega a página (vai forçar o login)
+      location.reload();
+    } catch (err) {
+      console.error('Erro no logout:', err);
+      location.reload();
+    }
+  };
+
+  window.handleBackClick = function() {
+    try {
+      // tenta chamar sua função existente de voltar / inicial
+      if (typeof window.showInitialScreen === 'function') {
+        window.showInitialScreen();
+        return;
+      }
+      // se estiver usando navegação por histórico:
+      if (window.history && window.history.back) {
+        window.history.back();
+        return;
+      }
+      // fallback: rola para topo e fecha modais
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      try { document.getElementById('cf-overlay')?.remove(); } catch(e){}
+    } catch (err) {
+      console.error('Erro no back:', err);
+    }
+  };
+
+  // boa prática: se o app dispara evento no login, manter compatibilidade
+  // (ex: quando o app detecta app:login-success pode esconder overlay etc.)
+  window.addEventListener('app:login-success', () => {
+    // remove overlay se existir
+    const ov = document.getElementById('login-overlay');
+    if (ov) try { ov.remove(); } catch(e) {}
+  });
+</script>
+
+<script>
+window.handleLogoutClick = function() {
+    try {
+      // remove persistência e força login novamente
+      localStorage.removeItem('persist_logged_v2');
+      localStorage.removeItem('saved_username_v2');
+      sessionStorage.removeItem('persist_logged_v2');
+
+      location.reload();
+    } catch (e) {
+      location.reload();
+    }
+};
+
+window.handleBackClick = function() {
+    if (typeof window.showInitialScreen === 'function') {
+        showInitialScreen();
+        return;
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+};
+</script>
+
+
     <!-- FIM LOGIN INJETADO -->
 
 </body>

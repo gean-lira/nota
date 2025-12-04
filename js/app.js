@@ -65,11 +65,18 @@ function renderDatalist(field) {
 /* render all datalists initially */
 function renderAllDatalists() {
     const fields = [
-        "f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref",
-        "prod_desc", "prod_price", "fee", "note", "searchName", "searchId"
+        "f_bairro",
+        "f_cidade",
+        "prod_desc",
+        "prod_price",
+        "fee",
+        "note",
+        "searchName",
+        "searchId"
     ];
     fields.forEach(renderDatalist);
 }
+
 
 /* helper to escape for option attribute */
 function escapeHtmlAttr(s) {
@@ -153,16 +160,23 @@ ensurePurchasesField();
 
 // ---------- REMOVIDO: cliente exemplo no localStorage ----------
 
-function newId() {
-    const ids = clients.map(c => Number(c.idNum)).filter(n => !isNaN(n)).sort((a, b) => a - b);
-    let i = 1; for (const n of ids) { if (n === i) i++; }
-    return i;
+/* nova função: retorna próximo idNum com base no array clients (somente valores totalmente numéricos) */
+function getNextLocalVisibleId() {
+  const vals = clients
+    .map(c => {
+      const v = (c.idNum ?? c.idnum ?? "").toString().trim();
+      return (/^\d+$/.test(v) ? Number(v) : NaN);
+    })
+    .filter(n => !isNaN(n));
+  const max = vals.length ? Math.max(...vals) : 0;
+  return max + 1;
 }
 
 function showInitialScreen() {
     if ($("client-area")) $("client-area").style.display = "block";
     if ($("product-area")) $("product-area").style.display = "none";
-    if ($("clientFormCard")) $("clientFormCard").style.display = "none";
+    // agora clientFormCard é movido para um modal; esconder via função de fechamento
+    hideClientFormModal();
     selectedClientId = null;
     if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
 }
@@ -234,11 +248,10 @@ function renderClients(name = "", id = "") {
     });
 
     // ordenar do maior para o menor pelo idNum (numérico, fallback 0)
-    filtered.sort((a, b) => {
-        const na = Number(a.idNum) || 0;
-        const nb = Number(b.idNum) || 0;
-        return nb - na; // nb - na => decrescente
-    });
+ filtered.sort((a, b) => {
+    return Number(b.numericId || 0) - Number(a.numericId || 0);
+});
+
 
     // DEBUG opcional
     console.log('renderClients -> filtered:', filtered.length, 'pageSize:', clientsPageSize, 'currentPage:', currentClientsPage);
@@ -254,28 +267,51 @@ function renderClients(name = "", id = "") {
     const pageItems = filtered.slice(start, end);
 
     // monta a lista da página atual
-    pageItems.forEach((c) => {
-        const rua = c.rua ? `${c.rua}${c.rua_num ? ", Nº " + c.rua_num : ""}` : "";
+pageItems.forEach((c) => {
 
-        const div = document.createElement("div");
-        div.className = "client-card";
-        div.innerHTML = `
-      <div class="client-info">
-        <div class="client-id">${escapeHtml(c.idNum)}</div>
-        <div>
-          <b>${escapeHtml(c.name)}</b><br>
-          <span class="muted">${escapeHtml(c.whatsapp || "")}</span><br>
-          <span class="muted" style="font-size:12px">${escapeHtml(rua)}</span>
-        </div>
+    // monta endereço completo
+    const rua = c.rua ? `${c.rua}${c.rua_num ? ", Nº " + c.rua_num : ""}` : "";
+    const bairro = c.bairro ? String(c.bairro).trim() : "";
+    const cidade = c.cidade ? String(c.cidade).trim() : "";
+
+    const div = document.createElement("div");
+    div.className = "client-card";
+    div.innerHTML = `
+  <div class="client-info">
+    <div class="client-id">${escapeHtml(c.idNum)}</div>
+
+    <div>
+      <div style="font-weight:600; margin-bottom:2px;">
+        ${escapeHtml(c.name)}
       </div>
 
-      <div style="display:flex; gap:6px;">
-        <button class="ghost small-btn" data-a="edit" data-id="${escapeHtmlAttr(String(c.idNum))}">Editar</button>
-        <button class="small-btn" data-a="select" data-id="${escapeHtmlAttr(String(c.idNum))}">Selecionar</button>
-        <button class="ghost small-btn" data-a="history" data-id="${escapeHtmlAttr(String(c.idNum))}">Histórico</button>
-        <button class="ghost small-btn" data-a="del" data-id="${escapeHtmlAttr(String(c.idNum))}">Excluir</button>
+      <div class="muted" style="font-size:12px; margin-bottom:2px;">
+        ${escapeHtml(rua)}
       </div>
-    `;
+
+      <div class="muted" style="font-size:12px;">
+        ${
+          bairro ? `Bairro: ${escapeHtml(bairro)}` : ``
+        }
+        ${
+          bairro && cidade ? ` — ` : ``
+        }
+        ${
+          cidade ? `Cidade: ${escapeHtml(cidade)}` : ``
+        }
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:6px;">
+    <button class="ghost small-btn" data-a="edit" data-id="${escapeHtmlAttr(String(c.idNum))}">Editar</button>
+    <button class="small-btn" data-a="select" data-id="${escapeHtmlAttr(String(c.idNum))}">Selecionar</button>
+    <button class="ghost small-btn" data-a="history" data-id="${escapeHtmlAttr(String(c.idNum))}">Histórico</button>
+    <button class="ghost small-btn" data-a="del" data-id="${escapeHtmlAttr(String(c.idNum))}">Excluir</button>
+  </div>
+`;
+
+
         box.appendChild(div);
     });
 
@@ -294,7 +330,7 @@ function renderClients(name = "", id = "") {
 }
 
 /* delegation for client list buttons */
-function clientsListClickHandler(e) {
+async function clientsListClickHandler(e) {
     const b = e.target.closest("button"); if (!b) return;
     const a = b.dataset.a;
     const idAttr = b.dataset.id;
@@ -314,14 +350,13 @@ function clientsListClickHandler(e) {
     }
 
     if (a === "edit") {
+        // Abre o modal de edição
         editingIndex = i;
 
-        if ($("client-area")) $("client-area").style.display = "none";
-        if ($("product-area")) $("product-area").style.display = "none";
-        if ($("clientFormCard")) $("clientFormCard").style.display = "block";
-
+        // Popula o form e abre modal
         $("f_name").value = c.name || "";
-        $("f_id").value = c.id ?? c.idNum ?? "";
+        // <-- corrigido: preencher CPF apenas quando houver campo cpf explícito
+        $("f_id").value = c.cpf || "";
         $("f_wh").value = c.whatsapp || "";
         $("f_phone").value = c.phone || "";
         $("f_rua").value = c.rua || "";
@@ -335,6 +370,8 @@ function clientsListClickHandler(e) {
         });
 
         try { $("f_name").focus(); $("f_name").select(); } catch (e) { }
+
+        showClientFormModal(editingIndex);
         return;
     }
 
@@ -346,39 +383,67 @@ function clientsListClickHandler(e) {
     if (a === "del") {
         if (!confirm("Excluir cliente? (o histórico será removido do banco também)")) return;
 
-        const clientIdNum = c.idNum;   // 👈 ADIÇÃO: guardar o idnum do cliente (STRING) - FIX
+        const clientIdNum = c.idNum;   // mantém string original
 
-        // remove da lista em memória e atualiza a tela
-        clients.splice(i, 1);
+        // NÃO remover da memória até confirmação do DB. Faz backup para rollback
+        const oldClients = clients.slice(); // cópia para rollback em caso de erro
 
-        // ajustar página atual se necessário
-        const maxPages = Math.max(1, Math.ceil(clients.length / clientsPageSize) || 1);
-        if (currentClientsPage > maxPages) currentClientsPage = maxPages;
+        if (!window.supabase) {
+            // fallback local: remove apenas da memória
+            clients.splice(i, 1);
+            renderClients(lastClientsSearchName, lastClientsSearchId);
+            return;
+        }
 
-        renderClients(lastClientsSearchName, lastClientsSearchId);
+        try {
+            // 1) tenta RPC seguro (recomendado) - a função SQL deve existir conforme instruções
+            let rpcRes;
+            try {
+                rpcRes = await window.supabase
+                    .rpc('delete_client_and_history', { p_id_text: String(clientIdNum) });
+            } catch (rpcErr) {
+                // supabase client lança se a rpc não existir ou erro
+                rpcRes = null;
+            }
 
-        // 👇 APAGA no Supabase
-        if (window.supabase) {
-            window.supabase
+            if (rpcRes && !rpcRes.error) {
+                // sucesso: atualizar memória e UI
+                clients.splice(i, 1);
+                const maxPages = Math.max(1, Math.ceil(clients.length / clientsPageSize) || 1);
+                if (currentClientsPage > maxPages) currentClientsPage = maxPages;
+                renderClients(lastClientsSearchName, lastClientsSearchId);
+                return;
+            }
+
+            // Se chegamos aqui, RPC não existiu ou falhou. Fazemos deleção manual (sequencial).
+            // 2) deletar histórico primeiro
+            const histDel = await window.supabase
                 .from('historico')
                 .delete()
-                .eq('cliente_indu', Number(clientIdNum)) // ensure numeric match
-                .then(({ error }) => {
-                    if (error) {
-                        console.error("Erro ao apagar histórico do cliente no Supabase:", error);
-                    }
-                });
+                .eq('cliente_indu', isNaN(Number(clientIdNum)) ? String(clientIdNum) : Number(clientIdNum));
 
-            // 2) apaga o próprio cliente
-            window.supabase
+            if (histDel.error) throw histDel.error;
+
+            // 3) deletar cliente
+            const cliDel = await window.supabase
                 .from('clientes')
                 .delete()
-                .eq('idnum', Number(clientIdNum))
-                .then(({ error }) => {
-                    if (error) {
-                        console.error("Erro ao apagar cliente no Supabase:", error);
-                    }
-                });
+                .eq('idnum', isNaN(Number(clientIdNum)) ? String(clientIdNum) : Number(clientIdNum));
+
+            if (cliDel.error) throw cliDel.error;
+
+            // se chegou aqui, ambas deletions ok -> atualiza memória e UI
+            clients.splice(i, 1);
+            const maxPages = Math.max(1, Math.ceil(clients.length / clientsPageSize) || 1);
+            if (currentClientsPage > maxPages) currentClientsPage = maxPages;
+            renderClients(lastClientsSearchName, lastClientsSearchId);
+
+        } catch (err) {
+            console.error("Erro ao apagar cliente/histórico no Supabase:", err);
+            alert("Erro ao apagar no banco: " + (err.message || JSON.stringify(err)));
+            // rollback da memória (repor clients se foi removido)
+            clients = oldClients;
+            renderClients(lastClientsSearchName, lastClientsSearchId);
         }
 
         return;
@@ -391,20 +456,143 @@ function bindClientsList() {
     if (clist) clist.onclick = clientsListClickHandler;
 }
 
+/* INSTALAÇÃO DO CLIENT FORM COMO MODAL (move o clientFormCard para dentro de um overlay) */
+(function installClientFormModal() {
+  if (window.__clientFormModalInstalled) return;
+  window.__clientFormModalInstalled = true;
+
+  // cria estilos caso não existam
+  if (!document.getElementById('client-form-modal-styles')) {
+    const st = document.createElement('style');
+    st.id = 'client-form-modal-styles';
+    st.textContent = `
+    /* overlay */
+    .cf-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2,6,23,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 999999;
+    }
+    .cf-window {
+      width: min(760px, calc(100% - 48px));
+      max-height: calc(100vh - 80px);
+      overflow: auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+    }
+    @media (max-width:520px){
+      .cf-window { width: calc(100% - 20px); padding:12px }
+    }
+    `;
+    document.head.appendChild(st);
+  }
+
+  // container references and helpers
+  const formCard = document.getElementById('clientFormCard');
+  if (!formCard) {
+    console.warn('clientFormCard não encontrado — modal de cliente não será instalado.');
+    return;
+  }
+
+  // show/hide functions (expondo globalmente)
+  window.showClientFormModal = function(index) {
+    try {
+      // if already open, focus
+      if (document.getElementById('cf-overlay')) {
+        setTimeout(()=> formCard.querySelector('input,button,textarea,select')?.focus(), 100);
+        return;
+      }
+
+      // save original parent to restore later
+      formCard.__orig_parent = formCard.parentNode;
+      formCard.__orig_next = formCard.nextSibling;
+      formCard.__orig_display = formCard.style.display || '';
+
+      const overlay = document.createElement('div');
+      overlay.id = 'cf-overlay';
+      overlay.className = 'cf-overlay';
+
+      const win = document.createElement('div');
+      win.className = 'cf-window';
+      win.appendChild(formCard);
+      overlay.appendChild(win);
+      document.body.appendChild(overlay);
+
+      formCard.style.display = 'block';
+      setTimeout(()=> formCard.querySelector('input,button,textarea,select')?.focus(), 120);
+
+      // store index being edited/set on window for later access
+      if (typeof index !== 'undefined' && index !== null) {
+        overlay.dataset.editIndex = String(index);
+      } else {
+        overlay.dataset.editIndex = '';
+      }
+
+      // click outside to close
+      overlay.addEventListener('click', function(e){
+        if (e.target === overlay) {
+          hideClientFormModal();
+        }
+      });
+
+      // close on ESC
+      function escHandler(ev){
+        if (ev.key === 'Escape') hideClientFormModal();
+      }
+      document.addEventListener('keydown', escHandler);
+      overlay.__escHandler = escHandler;
+
+    } catch (err) {
+      console.error('showClientFormModal erro:', err);
+    }
+  };
+
+  window.hideClientFormModal = function() {
+    try {
+      const overlay = document.getElementById('cf-overlay');
+      if (!overlay) return;
+      const esc = overlay.__escHandler;
+      if (esc) document.removeEventListener('keydown', esc);
+      const form = document.getElementById('clientFormCard');
+      if (form && form.__orig_parent) {
+        try {
+          const parent = form.__orig_parent;
+          const next = form.__orig_next;
+          if (next && next.parentNode === parent) parent.insertBefore(form, next);
+          else parent.appendChild(form);
+          form.style.display = form.__orig_display || 'none';
+        } catch(e){ console.warn('erro restaurando clientFormCard', e); }
+      }
+      overlay.remove();
+    } catch (err) {
+      console.error('hideClientFormModal erro:', err);
+    }
+  };
+
+  console.log('Client form modal instalado — Novo/Editar abrirá como modal central.');
+})();
+
+/* Botões e eventos relacionados ao formulário do cliente (agora via modal) */
 $("btnNew") && ($("btnNew").onclick = () => {
     editingIndex = null;
 
-    if ($("client-area")) $("client-area").style.display = "none";
-    if ($("product-area")) $("product-area").style.display = "none";
-    if ($("clientFormCard")) $("clientFormCard").style.display = "block";
-
+    // limpa campos
     ["f_name", "f_id", "f_wh", "f_phone", "f_rua", "f_rua_num", "f_bairro", "f_cidade", "f_ref"]
         .forEach(id => { if ($(id)) $(id).value = ""; });
 
-    setTimeout(() => { try { $("f_name").focus(); } catch (e) { } }, 40);
+    // abre modal
+    showClientFormModal(null);
 });
 
 $("closeForm") && ($("closeForm").onclick = () => {
+    // fecha modal
+    hideClientFormModal();
     showInitialScreen();
 });
 
@@ -413,6 +601,7 @@ $("cancelClientNew") && ($("cancelClientNew").onclick = () => {
     if ($("selectedLabel")) $("selectedLabel").innerText = "Nenhum";
     products = [];
     renderProducts();
+    hideClientFormModal();
     showInitialScreen();
 });
 
@@ -440,7 +629,7 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
 
     // EDITAR CLIENTE EXISTENTE
     if (editingIndex !== null && typeof editingIndex !== "undefined") {
-        const existing = clients[editingIndex] || { purchases: [], idNum: newId() };
+        const existing = clients[editingIndex] || { purchases: [], idNum: getNextLocalVisibleId() };
         const updated = {
             ...existing,
             ...obj,
@@ -471,57 +660,116 @@ $("saveClientNew") && ($("saveClientNew").onclick = async () => {
 
         clients[editingIndex] = updated;
         renderClients(lastClientsSearchName, lastClientsSearchId);
+        hideClientFormModal();
         showInitialScreen();
         return;
     }
+// NOVO CLIENTE
+// NÃO forçar idnum na inserção — deixar o banco preencher / usar id como fallback
+obj.purchases = [];
 
-    // NOVO CLIENTE
-    obj.idNum = String(newId()); // store as string internally - FIX
-    obj.purchases = [];
+const { data, error } = await window.supabase
+    .from('clientes')
+    .insert([{
+        nome: obj.name,
+        whatsapp: obj.whatsapp,
+        telefone: obj.phone,
+        rua: obj.rua,
+        rua_num: obj.rua_num,
+        bairro: obj.bairro,
+        cidade: obj.cidade,
+        referencia: obj.referencia
+    }])
+    .select();
 
-    const { data, error } = await window.supabase
-        .from('clientes')
-        .insert([{
-            idnum: Number(obj.idNum), // store numeric in DB
-            nome: obj.name,
-            whatsapp: obj.whatsapp,
-            telefone: obj.phone,
-            rua: obj.rua,
-            rua_num: obj.rua_num,
-            bairro: obj.bairro,
-            cidade: obj.cidade,
-            referencia: obj.referencia
-        }])
-        .select();
+if (error) {
+    console.error("message:", error.message);
+    console.error("details:", error.details);
+    console.error("hint:", error.hint);
+    console.error("code:", error.code);
+    console.error("full:", error);
+    alert("Erro ao salvar no banco: " + (error?.message || ""));
+    return;
+}
 
-    if (error) {
-        console.error("message:", error.message);
-        console.error("details:", error.details);
-        console.error("hint:", error.hint);
-        console.error("code:", error.code);
-        console.error("full:", error);
-        alert("Erro ao salvar no banco: " + (error?.message || ""));
-        return;
-    }
+const row = data && data[0];
 
-    const row = data && data[0];
-    if (row) {
-        clients.push({
-            ...obj,
-            idNum: String(row.idnum ?? obj.idNum) // ensure string - FIX
-        });
-    } else {
-        clients.push(obj);
-    }
+if (row) {
+    // monta o objeto do cliente com os dados retornados
+    const finalIdNum = (row.idnum !== null && row.idnum !== undefined && String(row.idnum).trim() !== "")
+                        ? String(row.idnum)
+                        : String(row.id);
 
+    const newClient = {
+      ...obj,
+      id: row.id ?? null,
+      idNum: finalIdNum
+    };
+
+    // adiciona na memória
+    clients.push(newClient);
+
+    // --- GARANTIA: cria numericId para todos e ordena por ele (decrescente) ---
+    clients = clients.map(c => {
+      // extrai dígitos do idNum; se não houver, usa id (PK)
+      const idNumDigits = String(c.idNum ?? "").replace(/\D+/g, '');
+      const numericFromIdNum = idNumDigits ? Number(idNumDigits) : NaN;
+      const fallbackId = (c.id !== null && c.id !== undefined) ? Number(c.id) : NaN;
+      const numericId = !isNaN(numericFromIdNum) ? numericFromIdNum : (!isNaN(fallbackId) ? fallbackId : 0);
+      return { ...c, numericId };
+    });
+
+    clients.sort((a, b) => (Number(b.numericId) || 0) - (Number(a.numericId) || 0));
+
+    // debug: mostra tabela no console para verificar valores
+    try {
+      console.table(clients.map(x => ({ id: x.id, idNum: x.idNum, numericId: x.numericId, name: x.name })));
+    } catch(e){ /* ignore */ }
+
+    // renderiza a lista (usuário vê na hora)
     renderClients(lastClientsSearchName, lastClientsSearchId);
-    showInitialScreen();
+
+    // tenta reload completo do DB para garantir sincronização definitiva (não obrigatório)
+    try {
+      await reloadClientsFromDB();
+    } catch (e) {
+      console.warn('reloadClientsFromDB falhou (mas cliente já exibido):', e);
+    }
+
+} else {
+    // fallback local (caso supabase não retorne row)
+    obj.idNum = String(getNextLocalVisibleId());
+    clients.push(obj);
+
+    // cria numericId e ordena
+    clients = clients.map(c => {
+      const idNumDigits = String(c.idNum ?? "").replace(/\D+/g, '');
+      const numericFromIdNum = idNumDigits ? Number(idNumDigits) : NaN;
+      const fallbackId = (c.id !== null && c.id !== undefined) ? Number(c.id) : NaN;
+      const numericId = !isNaN(numericFromIdNum) ? numericFromIdNum : (!isNaN(fallbackId) ? fallbackId : 0);
+      return { ...c, numericId };
+    });
+    clients.sort((a, b) => (Number(b.numericId) || 0) - (Number(a.numericId) || 0));
+
+    console.table(clients.map(x => ({ id: x.id, idNum: x.idNum, numericId: x.numericId, name: x.name })));
+    renderClients(lastClientsSearchName, lastClientsSearchId);
+}
+
+editingIndex = null;
+hideClientFormModal();
+showInitialScreen();
+
+showInitialScreen();
+
 });
 
+/* voltar botão */
 $("backClient") && ($("backClient").onclick = () => {
+    hideClientFormModal();
     showInitialScreen();
 });
 
+/* produtos (permanece inalterado) */
 $("addProd") && ($("addProd").onclick = () => {
     const desc = $("prod_desc").value.trim();
     let price = parseFloat(String($("prod_price").value || "0").replace(",", "."));
@@ -584,16 +832,17 @@ function buildPrint(obj) {
     let lista = "";
     if (Array.isArray(produtos) && produtos.length > 0) {
         lista = produtos.map(p => {
-            const desc = p.desc || "";
-            const price = Number(p.price) || 0;
-            const priceText = price.toFixed(2).replace(".", ",");
-            return `
-        <div style="display:flex; justify-content:space-between; margin-bottom:2px; font-size:12px;">
+    const desc = p.desc || "";
+    const price = Number(p.price) || 0;
+    const priceText = price.toFixed(2).replace(".", ",");
+    return `
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:13px; font-weight:700;">
           <span style="max-width:62mm; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(desc)}</span>
           <span>R$ ${priceText}</span>
         </div>
-      `;
-        }).join("");
+    `;
+}).join("");
+
     } else {
         lista = `<div style="font-size:12px;">-- Nenhum produto informado --</div>`;
     }
@@ -612,8 +861,7 @@ function buildPrint(obj) {
     padding:10px 16px;
     font-size:19px;
     font-family: Arial, Helvetica, sans-serif;
-">
-
+"> 
 
       <div style="text-align:center; font-weight:700; margin-bottom:18px; font-size:20px;">NOTA DE ENTREGA</div>
 
@@ -631,13 +879,13 @@ function buildPrint(obj) {
 
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
 
-     <b style="font-size:12px;">Cliente:</b>
-<div style="margin:2px 0; font-size:11px;"><b>Nome:</b> ${escapeHtml(client?.name || "")}</div>
-<div style="margin:2px 0; font-size:11px;"><b>Rua:</b> ${escapeHtml(rua)}</div>
-<div style="margin:2px 0; font-size:11px;"><b>Bairro:</b> ${escapeHtml(client?.bairro || "")}</div>
-<div style="margin:2px 0; font-size:11px;"><b>Cidade:</b> ${escapeHtml(client?.cidade || "")}</div>
-<div style="margin:2px 0; font-size:11px;"><b>Whats:</b> ${escapeHtml(client?.whatsapp || "")}</div>
-<div style="margin:2px 0; font-size:11px;"><b>Tel:</b> ${escapeHtml(client?.phone || "")}</div>
+     
+<div style="margin:2px 0; font-size:12px;"><b>Cliente:</b> ${escapeHtml(client?.name || "")}</div>
+<div style="margin:2px 0; font-size:12px;"><b>Rua:</b> ${escapeHtml(rua)}</div>
+<div style="margin:2px 0; font-size:12px;"><b>Bairro:</b> ${escapeHtml(client?.bairro || "")}</div>
+<div style="margin:2px 0; font-size:12px;"><b>Cidade:</b> ${escapeHtml(client?.cidade || "")}</div>
+<div style="margin:2px 0; font-size:12px;"><b>Whats:</b> ${escapeHtml(client?.whatsapp || "")}</div>
+<div style="margin:2px 0; font-size:12px;"><b>Tel:</b> ${escapeHtml(client?.phone || "")}</div>
 
 
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
@@ -839,7 +1087,7 @@ async function loadHistoryIntoClients() {
 
 
 /* botão imprimir / registrar compra */
-$("printBtn").onclick = async () => {
+$("printBtn") && ($("printBtn").onclick = async () => {
 
     // NÃO usa printingLock aqui — só dentro do savePurchaseToClient
 
@@ -862,7 +1110,7 @@ $("printBtn").onclick = async () => {
     if ($("fee").value) addSuggestion("fee", $("fee").value);
     if ($("note").value) addSuggestion("note", $("note").value);
 
-    // 🔥 Agora apenas salva, SEM travar aqui
+    // 🔥 Agora apenas salvar, SEM travar aqui
     const saved = await savePurchaseToClient(client.idNum, {
         produtos: products,
         fee,
@@ -905,8 +1153,7 @@ $("printBtn").onclick = async () => {
         console.error("Erro ao chamar window.print:", err);
         cleanUpAfterPrint();
     }
-};
-
+});
 
 /* HISTÓRICO: abrir modal */
 function openHistory(index) {
@@ -1025,7 +1272,7 @@ $("historyContent") && ($("historyContent").onclick = function (e) {
             }
         };
 
-        window.addEventListener('afterprint', afterPrintCleanup);
+        window.addEventListener("afterprint", afterPrintCleanup);
 
         try {
             window.print();
@@ -1064,22 +1311,38 @@ domReady(() => {
                 .order('id', { ascending: true });
 
             if (!error && Array.isArray(data)) {
-                clients = data.map(c => {
-                    // normalize idNum to STRING to avoid type mismatch when matching with historico.cliente_indu - FIX
-                    const rawIdNum = c.idnum ?? c.idNum ?? c.id ?? "";
-                    return {
-                        id: c.id || c.euia || c.id,
-                        idNum: rawIdNum !== null && rawIdNum !== undefined ? String(rawIdNum).trim() : "",
-                        name: c.nome || c.name || c.nome,
-                        whatsapp: c.whatsapp || c.WhatsApp,
-                        rua: c.rua,
-                        rua_num: c.rua_num,
-                        bairro: c.bairro,
-                        cidade: c.cidade,
-                        referencia: c.referencia,
-                        purchases: []
-                    };
-                });
+               clients = data.map(c => {
+    // se idnum é nulo/ vazio, usa id (PK) como fallback
+    const rawIdNum = (c.idnum !== null && c.idnum !== undefined && String(c.idnum).trim() !== "")
+        ? String(c.idnum).trim()
+        : String(c.id);
+
+    const id = c.id ?? null;
+    const idNum = rawIdNum;
+
+    // calcula numericId (apenas se idNum for totalmente dígitos; senão usa id PK)
+    const idNumDigitsOnly = /^\d+$/.test(String(idNum ?? "").trim());
+    const numericFromIdNum = idNumDigitsOnly ? Number(String(idNum).trim()) : NaN;
+    const fallbackId = (id !== null && id !== undefined && /^\d+$/.test(String(id))) ? Number(id) : NaN;
+    const numericId = !isNaN(numericFromIdNum) ? numericFromIdNum : (!isNaN(fallbackId) ? fallbackId : 0);
+
+    return {
+        id: id,
+        idNum: idNum,
+        numericId: numericId,
+        
+        cpf: c.cpf ?? "",
+        name: c.nome || c.name || "",
+        whatsapp: c.whatsapp || c.WhatsApp || "",
+        rua: c.rua || "",
+        rua_num: c.rua_num || "",
+        bairro: c.bairro || "",
+        cidade: c.cidade || "",
+        referencia: c.referencia || "",
+        purchases: []
+    };
+});
+
             }
 
             await loadHistoryIntoClients();
@@ -1328,3 +1591,4 @@ domReady(() => {
 
   console.log('product-modal instalado — ao clicar em "Selecionar" abre como janela no topo.');
 })();
+

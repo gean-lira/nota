@@ -264,3 +264,55 @@ button.ghost {
 .sticky-header .card {
     margin: 0 0 12px 0;
 }
+/* ===== BOTÕES FIXOS (Voltar + Sair) ===== */
+.fixed-buttons {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 999999;
+  align-items: flex-end;
+  pointer-events: auto;
+}
+
+/* botão principal (Sair) estilo forte */
+.fixed-buttons .btn-logout {
+  background: #0f172a;
+  color: #fff;
+  border: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(16,24,40,0.12);
+}
+
+/* botão secundário (Voltar) estilo ghost */
+.fixed-buttons .btn-back {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #d5dee9;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(16,24,40,0.06);
+}
+
+/* hover */
+.fixed-buttons .btn-logout:hover { opacity: 0.95; transform: translateY(-1px); }
+.fixed-buttons .btn-back:hover { opacity: 0.95; transform: translateY(-1px); }
+
+/* versão compacta em telas pequenas */
+@media (max-width: 520px) {
+  .fixed-buttons { right: 12px; bottom: 12px; gap: 8px; }
+  .fixed-buttons .btn-logout { padding: 8px 12px; font-size: 14px; }
+  .fixed-buttons .btn-back { padding: 6px 10px; font-size: 13px; }
+}
+
+/* não aparecer na impressão */
+@media print {
+  .fixed-buttons { display: none !important; }
+}
