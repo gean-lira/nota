@@ -184,48 +184,48 @@ button.ghost {
 
 /* estilo específico para impressão (fonte aumentada para leitura) */
 @media print {
-    @page {
-        size: 80mm auto;
-        margin: 0;
-    }
+  /* tamanho de página: largura exata 80mm, altura automática */
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
 
-    body *:not(#print-area):not(#print-area *) {
-        visibility: hidden !important;
-    }
+  /* ocultar tudo fora da área de impressão */
+  body *:not(#print-area):not(#print-area *) {
+    visibility: hidden !important;
+  }
 
-    #print-area,
-    #print-area * {
-        visibility: visible !important;
-    }
+  #print-area,
+  #print-area * {
+    visibility: visible !important;
+  }
 
-    #print-area {
-        display: block !important;
-        position: fixed !important;
-        left: 0 !important;
-        top: 0 !important;
-        width: 80mm !important;
-        padding: 3px !important;
-        /* compacto */
-        margin: 0 !important;
-        background: #fff !important;
-        font-family: monospace !important;
-        font-size: 12px !important;
-        /* fonte maior */
-        line-height: 1 !important;
-        /* espaçamento simples */
-        color: #000 !important;
-        box-sizing: border-box !important;
-        -webkit-print-color-adjust: exact !important;
-    }
+  /* área de impressão: usar position: relative para evitar problemas de escala */
+  #print-area {
+    display: block !important;
+    position: relative !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 80mm !important;       /* largura deve bater com o @page */
+    max-width: 80mm !important;
+    padding: 3px !important;
+    margin: 0 !important;
+    background: #fff !important;
+    font-family: monospace, "Courier New", monospace !important;
+    font-size: 12px !important;
+    line-height: 1 !important;
+    color: #000 !important;
+    box-sizing: border-box !important;
+    -webkit-print-color-adjust: exact !important;
+    transform: none !important;
+    zoom: 1 !important;
+  }
 
-    #print-area .no-break {
-        page-break-inside: avoid;
-    }
-
-    #print-area .prod-item {
-        margin-bottom: 2px;
-    }
+  /* evitar quebras estranhas */
+  #print-area .no-break { page-break-inside: avoid; }
+  #print-area .prod-item { margin-bottom: 2px; }
 }
+
 /* ===== PAGINAÇÃO ===== */
 .pager{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .pager button{padding:6px 8px;border-radius:6px;border:1px solid #d5dee9;background:#fff;color:#0f172a;cursor:pointer;font-weight:600}
