@@ -881,12 +881,12 @@ function buildPrint(obj) {
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
 
      
-<div style="margin:2px 0; font-size:12px;"><b>Cliente:</b> ${escapeHtml(client?.name || "")}</div>
-<div style="margin:2px 0; font-size:12px;"><b>Rua:</b> ${escapeHtml(rua)}</div>
-<div style="margin:2px 0; font-size:12px;"><b>Bairro:</b> ${escapeHtml(client?.bairro || "")}</div>
-<div style="margin:2px 0; font-size:12px;"><b>Cidade:</b> ${escapeHtml(client?.cidade || "")}</div>
-<div style="margin:2px 0; font-size:12px;"><b>Whats:</b> ${escapeHtml(client?.whatsapp || "")}</div>
-<div style="margin:2px 0; font-size:12px;"><b>Tel:</b> ${escapeHtml(client?.phone || "")}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Cliente:</b> ${escapeHtml(client?.name || "")}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Rua:</b> ${escapeHtml(rua)}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Bairro:</b> ${escapeHtml(client?.bairro || "")}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Cidade:</b> ${escapeHtml(client?.cidade || "")}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Whats:</b> ${escapeHtml(client?.whatsapp || "")}</div>
+<div style="margin:2px 0; font-size:11px;"><b>Tel:</b> ${escapeHtml(client?.phone || "")}</div>
 
 
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
