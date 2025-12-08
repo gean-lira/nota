@@ -203,23 +203,22 @@ button.ghost {
   /* área de impressão: usar position: relative para evitar problemas de escala */
   #print-area {
     display: block !important;
-    position: relative !important;
+    position: fixed !important;
     left: 0 !important;
     top: 0 !important;
     width: 80mm !important;       /* largura deve bater com o @page */
     max-width: 80mm !important;
     min-height: 140mm !important;
-    padding: 3px !important;
+    box-sizing: border-box !important;
+    padding: 2mm 3mm !important;
     margin: 0 !important;
     background: #fff !important;
     font-family: monospace, "Courier New", monospace !important;
     font-size: 12px !important;
     line-height: 1 !important;
     color: #000 !important;
-    box-sizing: border-box !important;
     -webkit-print-color-adjust: exact !important;
     transform: none !important;
-    zoom: 1 !important;
   }
 
   /* evitar quebras estranhas */
