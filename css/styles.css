@@ -190,9 +190,16 @@ button.ghost {
     margin: 0;
   }
 
-  /* ocultar tudo fora da área de impressão */
+  /* garante que o layout da página seja só o recibo */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 80mm !important;
+  }
+
+  /* AGORA SIM: some do layout tudo que não é o recibo */
   body *:not(#print-area):not(#print-area *) {
-    visibility: hidden !important;
+    display: none !important;      /* (antes era visibility:hidden) */
   }
 
   #print-area,
@@ -200,18 +207,18 @@ button.ghost {
     visibility: visible !important;
   }
 
-  /* área de impressão: usar position: relative para evitar problemas de escala */
+  /* área de impressão */
   #print-area {
     display: block !important;
-    position: fixed !important;
+    position: static !important;   /* não precisa mais ser fixed */
     left: 0 !important;
     top: 0 !important;
-    width: 80mm !important;       /* largura deve bater com o @page */
+    width: 80mm !important;        /* bate certinho com o papel */
     max-width: 80mm !important;
-    min-height: 140mm !important;
+    min-height: 140mm !important;  /* ~14 cm, como você pediu */
     box-sizing: border-box !important;
     padding: 2mm 3mm !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     background: #fff !important;
     font-family: monospace, "Courier New", monospace !important;
     font-size: 12px !important;
@@ -222,9 +229,20 @@ button.ghost {
   }
 
   /* evitar quebras estranhas */
-  #print-area .no-break { page-break-inside: avoid; }
-  #print-area .prod-item { margin-bottom: 2px; }
+  #print-area .no-break {
+    page-break-inside: avoid;
+  }
+
+  #print-area .prod-item {
+    margin-bottom: 2px;
+  }
+
+  /* não aparecer na impressão */
+  .fixed-buttons { 
+    display: none !important; 
+  }
 }
+
 
 /* ===== PAGINAÇÃO ===== */
 .pager{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
