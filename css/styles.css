@@ -215,7 +215,7 @@ button.ghost {
     top: 0 !important;
     width: 80mm !important;        /* bate certinho com o papel */
     max-width: 80mm !important;
-    min-height: 140mm !important;  /* ~14 cm, como você pediu */
+    min-height: 180mm !important;  /* ~18 cm, como você pediu */
     box-sizing: border-box !important;
     padding: 2mm 3mm !important;
     margin: 0 auto !important;
